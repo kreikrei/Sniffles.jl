@@ -40,8 +40,20 @@ export silence!
 export silent
 
 #core.jl
+export rmax
+export callMax!
+export Q
+export f
+export tot
 export master
 export buildMaster
 export getDuals
+export sub
+export colStructure
+export callSub!
+export buildSub
+export getCols
+export colGen
+export origin
 
 end

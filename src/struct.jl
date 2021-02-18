@@ -58,7 +58,7 @@ end
 struct dval
     #three master constraints
     λ::JuMP.Containers.DenseAxisArray
-    δ::JuMP.Containers.DenseAxisArray
+    δ::JuMP.Containers.SparseAxisArray
     ϵ::JuMP.Containers.DenseAxisArray
 
     #bounding constraints
