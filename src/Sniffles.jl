@@ -38,4 +38,9 @@ export sl_C
 export silence!
 export silent
 
+#core.jl
+export master
+export buildMaster
+export getDuals
+
 end
