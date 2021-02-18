@@ -1,6 +1,2 @@
-using Sniffles
-using Test
-
-@testset "Sniffles.jl" begin
-    # Write your tests here.
-end
+using SafeTestsets
+@safetestset "Sniffles test" begin include("testscripts.jl") end
