@@ -9,6 +9,7 @@ using UUIDs
 include("struct.jl")
 include("settings.jl")
 include("base.jl")
+include("core.jl")
 
 #struct.jl
 export vtx
