@@ -54,8 +54,8 @@ function Btest(n::node)
 
     newstack = separate(n)
 
-    for k in keys(b().K), t in b().T
-        for q in [:y,:z,:u,:v]
+    for q in [:y,:z,:u,:v]
+        for k in keys(b().K), t in b().T
             totest = filter(p -> p[1].i == k && p[2].i == t && p[3].q == q,newstack)
             candidate = [last(p).i for p in totest]
             cardinality = 1
