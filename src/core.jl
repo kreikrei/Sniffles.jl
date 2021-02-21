@@ -8,13 +8,13 @@ function Q(key,R)
 
         if key.q == :k
             for r in keys(R), k in keys(b().K), t in b().T
-                if k == key.i #CARI VEHICLE
+                if k == key.i #CARI K yg sama
                     push!(q,(r=r,k=k,t=t))
                 end
             end
         elseif key.q == :t
             for r in keys(R), k in keys(b().K), t in b().T
-                if t == key.i #CARI PERIOD
+                if t == key.i #CARI T yang sama
                     push!(q,(r=r,k=k,t=t))
                 end
             end
