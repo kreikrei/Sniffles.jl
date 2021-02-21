@@ -283,18 +283,18 @@ function colStructure!(n::node)
     uB = filter(f -> last(f).type == :≲,F)
     lB = filter(f -> last(f).type == :≳,F)
 
-    @variable(sp, g[keys(uB), iter_k, iter_t], Bin)
-    @variable(sp, h[keys(lB), iter_k, iter_t], Bin)
+    @variable(sp, g[keys(uB), iter_k, b().T], Bin)
+    @variable(sp, h[keys(lB), iter_k, b().T], Bin)
 
     q = col(u,v,l,y,z,x)
 
     for j in keys(uB)
-        η = @variable(sp, [F[j].B, iter_k, iter_t], Bin)
+        η = @variable(sp, [F[j].B, iter_k, b().T], Bin)
 
-        @constraint(sp, [k = iter_k, t = iter_t],
+        @constraint(sp, [k = iter_k, t = b().T],
             g[j,k,t] >= 1 - sum(1 - η[e] for e in F[j].B)
         )
-        @constraint(sp, [e = F[j].B, k = iter_k, t = iter_t],
+        @constraint(sp, [e = F[j].B, k = iter_k, t = b().T],
             (maxq(e.q,e.i,k,t) - e.v + 1) * η[e] >=
             (getproperty(q,e.q)[e.i,k,t] - e.v + 1)
         )
@@ -302,12 +302,12 @@ function colStructure!(n::node)
     end
 
     for j in keys(lB)
-        η = @variable(sp, [F[j].B, iter_k, iter_t], Bin)
+        η = @variable(sp, [F[j].B, iter_k, b().T], Bin)
 
-        @constraint(sp, [e = F[j].B, k = iter_k, t = iter_t],
+        @constraint(sp, [e = F[j].B, k = iter_k, t = b().T],
             h[j,k,t] <= η[e,k,t]
         )
-        @constraint(sp, [e = F[j].B, k = iter_k, t = iter_t],
+        @constraint(sp, [e = F[j].B, k = iter_k, t = b().T],
             e.v * η[e,k,t] <= getproperty(q,e.q)[e.i,k,t]
         )
     end
@@ -390,7 +390,7 @@ function buildSub(n::node,duals::dval)
                 for j in keys(lB)
             )
             for k in keys(b().K), t in b().T
-        )        
+        )
     )
 
     return sp
