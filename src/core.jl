@@ -283,38 +283,33 @@ function colStructure!(n::node)
     uB = filter(f -> last(f).type == :≲,F)
     lB = filter(f -> last(f).type == :≳,F)
 
-    @variable(sp, g[keys(uB)], Bin)
-    @variable(sp, h[keys(lB)], Bin)
+    @variable(sp, g[keys(uB), iter_k, iter_t], Bin)
+    @variable(sp, h[keys(lB), iter_k, iter_t], Bin)
 
     q = col(u,v,l,y,z,x)
 
     for j in keys(uB)
-        k = filter(f -> f.q == :k, F[j].B)[].i #deterime k
-        t = filter(f -> f.q == :t, F[j].B)[].i #determine t
+        η = @variable(sp, [F[j].B, iter_k, iter_t], Bin)
 
-        unit = filter(f -> !(f.q in [:k,:t]), F[j].B)
+        @constraint(sp, [k = iter_k, t = iter_t],
+            g[j,k,t] >= 1 - sum(1 - η[e] for e in F[j].B)
+        )
+        @constraint(sp, [e = F[j].B, k = iter_k, t = iter_t],
+            (maxq(e.q,e.i,k,t) - e.v + 1) * η[e] >=
+            (getproperty(q,e.q)[e.i,k,t] - e.v + 1)
+        )
 
-        η = @variable(sp, [unit], Bin)
-        @constraint(sp, g[j] >= 1 - sum(1 - η[e] for e in unit))
-        for e in unit
-            @constraint(sp,
-                (maxq(e.q,e.i,k,t) - e.v + 1) * η[e] >=
-                (getproperty(q,e.q)[e.i,k,t] - e.v + 1)
-            )
-        end
     end
 
     for j in keys(lB)
-        k = filter(f -> f.q == :k, F[j].B)[].i #deterime k
-        t = filter(f -> f.q == :t, F[j].B)[].i #determine t
+        η = @variable(sp, [F[j].B, iter_k, iter_t], Bin)
 
-        unit = filter(f -> !(f.q in [:k,:t]), F[j].B)
-
-        η = @variable(sp, [unit], Bin)
-        @constraint(sp, [e = unit], h[j] <= η[e])
-        for e in unit
-            @constraint(sp, e.v * η[e] <= getproperty(q,e.q)[e.i,k,t])
-        end
+        @constraint(sp, [e = F[j].B, k = iter_k, t = iter_t],
+            h[j,k,t] <= η[e,k,t]
+        )
+        @constraint(sp, [e = F[j].B, k = iter_k, t = iter_t],
+            e.v * η[e,k,t] <= getproperty(q,e.q)[e.i,k,t]
+        )
     end
 
     optimize!(sp) #first call biar model kebuild
@@ -383,13 +378,19 @@ function buildSub(n::node,duals::dval)
             for k in keys(b().K), t in b().T
         ) -
         sum(
-            sp.obj_dict[:g][j] * duals.ρ[j]
-            for j in keys(uB)
+            sum(
+                sp.obj_dict[:g][j,k,t] * duals.ρ[j]
+                for j in keys(uB)
+            )
+            for k in keys(b().K), t in b().T
         ) -
         sum(
-            sp.obj_dict[:h][j] * duals.σ[j]
-            for j in keys(lB)
-        )
+            sum(
+                sp.obj_dict[:h][j,k,t] * duals.σ[j]
+                for j in keys(lB)
+            )
+            for k in keys(b().K), t in b().T
+        )        
     )
 
     return sp
