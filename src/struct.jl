@@ -66,15 +66,18 @@ struct dval
     σ::JuMP.Containers.DenseAxisArray
 end
 
-struct kt
-    k::Int64
-    t::Int64
-end
-
 struct β{T<:Any,S<:Any}
     q::T
     i::S
     v::S
+end
+
+function β(q::Symbol,i::Int64)
+    if q in [:y,:z,:k,:t]
+        return β(q,i,1)
+    else
+        return β(q,i,0)
+    end
 end
 
 struct bound

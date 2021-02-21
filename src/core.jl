@@ -6,9 +6,15 @@ function Q(key,R)
     if isa(key,β)
         q = Vector{NamedTuple}()
 
-        if isa(key.q,kt)
+        if key.q == :k
             for r in keys(R), k in keys(b().K), t in b().T
-                if k == key.q.k && t == key.q.t
+                if k == key.i #CARI VEHICLE
+                    push!(q,(r=r,k=k,t=t))
+                end
+            end
+        elseif key.q == :t
+            for r in keys(R), k in keys(b().K), t in b().T
+                if t == key.i #CARI PERIOD
                     push!(q,(r=r,k=k,t=t))
                 end
             end
@@ -275,10 +281,10 @@ function colStructure!(n::node)
     q = col(u,v,l,y,z,x)
 
     for j in keys(uB)
-        sub = filter(f -> isa(f.q,kt),F[j].B)
-        unit = filter(f -> !isa(f.q,kt),F[j].B)
-        k = sub[1].q.k
-        t = sub[1].q.t
+        k = filter(f -> f.q == :k, F[j].B)[].i #deterime k
+        t = filter(f -> f.q == :t, F[j].B)[].i #determine t
+
+        unit = filter(f -> !(f.q in [:k,:t]), F[j].B)
 
         η = @variable(sp, [unit], Bin)
         @constraint(sp, g[j] >= 1 - sum(1 - η[e] for e in unit))
@@ -291,10 +297,10 @@ function colStructure!(n::node)
     end
 
     for j in keys(lB)
-        sub = filter(f -> isa(f.q,kt),F[j].B)
-        unit = filter(f -> !isa(f.q,kt),F[j].B)
-        k = sub[1].q.k
-        t = sub[1].q.t
+        k = filter(f -> f.q == :k, F[j].B)[].i #deterime k
+        t = filter(f -> f.q == :t, F[j].B)[].i #determine t
+
+        unit = filter(f -> !(f.q in [:k,:t]), F[j].B)
 
         η = @variable(sp, [unit], Bin)
         @constraint(sp, [e = unit], h[j] <= η[e])
