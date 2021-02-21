@@ -36,6 +36,14 @@ function Q(key,R)
     end
 end
 
+function f(key,R,θ)
+    if !isempty(Q(key,R))
+        return sum(θ[q.r,q.k,q.t] - floor(θ[q.r,q.k,q.t]) for q in Q(key,R))
+    else
+        return 0
+    end
+end
+
 function s(key,R,θ)
     if !isempty(Q(key,R))
         return sum(θ[q.r,q.k,q.t] for q in Q(key,R))
