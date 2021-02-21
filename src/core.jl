@@ -142,7 +142,7 @@ function buildMaster(n::node)
     )
 
     @constraint(mp, ϵ[k = iter_k, t = b().T],
-        sum(θ[r,k,t] for r in keys(R)) == sum(b().K[k].BP[i] for i in b().K[k].cover)
+        sum(θ[r,k,t] for r in keys(R)) <= sum(b().K[k].BP[i] for i in b().K[k].cover)
     )
 
     @constraint(mp, [i = keys(b().V), t = b().T],
