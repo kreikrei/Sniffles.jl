@@ -39,7 +39,7 @@ function Q(key,R)
         else
             return q
         end
-    else
+    elseif isempty(key)
         q = Vector{NamedTuple}()
 
         for r in keys(R), k in keys(b().K), t in b().T
