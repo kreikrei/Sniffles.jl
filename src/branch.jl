@@ -3,107 +3,85 @@
 # =========================================================================
 
 function separate(n::node)
-    #PROTOTYPE SEPARATION
     R = Dict(1:length(n.columns) .=> n.columns)
     θ = value.(master(n).obj_dict[:θ])
 
-    F = Vector{NamedTuple}()
-    for r in keys(R), k in keys(b().K), t in b().T
-        if θ[r,k,t] - floor(θ[r,k,t]) > 0
-            push!(F,(r=r,k=k,t=t))
-        end
-    end #semua q yang nilai θ-nya masih fractional
-
-    qF = DataFrame(q = Symbol[], i = Int64[], val = Int64[])
-    for f in F, q in [:u,:v,:y,:z], i in keys(b().V)
-        append!(qF,
-            DataFrame(
-                q = q,
-                i = i,
-                val = getproperty(R[f.r],q)[i,f.k,f.t]
-            )
-        )
-    end #collect existing values of the variable (q,i)
-
-    return qF
-end
-
-function vtest(q::Symbol,i::Int64,qF::DataFrame)
-    test_v = Vector{Int64}()
-
-    distinct = filter(p -> p.i == i && p.q == q,qF).val
-    push!(distinct,0)
-    sort!(distinct)
-
-    for w in 1:length(distinct)-1
-        comp = ceil((distinct[w] + distinct[w+1]) / 2)
-        if comp > 0
-            push!(test_v, comp)
+    res = Vector{NamedTuple}() #SEMUA RKT yang fractional
+    for r in θ.axes[1], k in θ.axes[2], t in θ.axes[3]
+        if !isinteger(θ[r,k,t])
+            push!(res,(r=r,k=k,t=t))
         end
     end
 
-    res = Vector{β}()
+    boundstack = Vector{Vector{β}}() #HITUNG V tiap qi di rkt
+    for q in [:u,:v,:y,:z]
+        for i in keys(b().V), k in keys(b().K), t in b().T
+            store = Vector{Int64}() #collect all values contained in rkt
+            for raw in res
+                if k == raw.k && t == raw.t
+                    val = getproperty(R[raw.r],q)[i,k,t]
+                    push!(store,val)
+                end
+            end
 
-    for v in unique!(test_v)
-        push!(res,β(q,i,v))
+            test = Vector{Int64}() #summarize the values, we average 1-by-1
+            for w in 1:length(store)-1
+                comp = ceil((store[w] + store[w+1]) / 2)
+                if comp > 0
+                    push!(test,comp)
+                end
+            end
+            unique!(test) #find the distinct values
+
+
+            if !isempty(test)
+                v = findmin(test)[1]
+                new = Vector{β}()
+                push!(new,β(:k,k))
+                push!(new,β(:t,t))
+                push!(new,β(q,i,v))
+                push!(boundstack,new)
+            end
+        end
     end
 
-    return reverse(res)
+    return boundstack
 end
-
-function qstack()
-    res = Vector{β}()
-
-    for q in [:u,:v,:y,:z], i in keys(b().V)
-        push!(res,β(q,i,nothing))
-    end
-
-    return res
-end
-
-issinteger(val,tol) = abs(round(val) - val) < tol
 
 function Btest(n::node)
     R = Dict(1:length(n.columns) .=> n.columns)
     θ = value.(master(n).obj_dict[:θ])
 
-    test_stack = qstack()
-    test_B = Vector{β}()
-    lastf1 = deepcopy(test_B)
-    terminate = false
-    sep = separate(n)
+    newstack = separate(n)
 
-    while !terminate
-        if isempty(test_stack)
-            append!(test_B,lastf1)
-            test_stack = qstack()
-        else
-            test_β = pop!(test_stack)
-            #println(test_β)
-            #println("stack sisa: $(length(test_stack))")
+    for k in keys(b().K), t in b().T
+        for q in [:y,:z,:u,:v]
+            totest = filter(p -> p[1].i == k && p[2].i == t && p[3].q == q,newstack)
+            candidate = [last(p).i for p in totest]
+            cardinality = 1
 
-            if isnothing(test_β.v)
-                append!(test_stack,vtest(test_β.q,test_β.i,sep))
-                #println("new stack added")
-            else
-                push!(test_B,test_β)
+            while cardinality <= floor(log2(f([],R,θ))) + 1
+                combo = collect(combinations(candidate,cardinality))
 
-                fract = f(test_B,R,θ)
-                if fract >= 1
-                    lastf1 = deepcopy(test_B)
+                for i in combo
+                    tes = filter(p -> last(p).i in i,totest)
+                    if !isempty(tes)
+                        hehe = reduce(union,tes)
+                        nilaii = s(hehe,R,θ)
+                        if !Sniffles.issinteger(nilaii,1e-8)
+                            return hehe
+                        end
+                    end
                 end
 
-                if !issinteger(s(test_B,R,θ),1e-8)
-                    break
-                else
-                    pop!(test_B)
-                end
+                #fractional not found increase cardinality
+                cardinality += 1
             end
         end
     end
-
-    return test_B
 end
+
+issinteger(val,tol) = abs(round(val) - val) < tol
 
 function integerCheck(n::node)
     integer = true
@@ -125,7 +103,7 @@ function createBranch(n::node)
     R = Dict(1:length(n.columns) .=> n.columns)
     θ = value.(master(n).obj_dict[:θ])
 
-    for br in ["≳","≲"]
+    for br in [:≳,:≲]
         push!(branches,
             node(
                 n.self, #parent
@@ -134,7 +112,7 @@ function createBranch(n::node)
                 vcat(n.bounds, #bounds
                     bound(
                         seeds,br,
-                        if br == "≲"
+                        if br == :≲
                             floor(s(seeds,R,θ))
                         else
                             ceil(s(seeds,R,θ))
@@ -157,6 +135,7 @@ function leaf(n::node,upperBound::Float64,maxiter::Float64)
     stack = Vector{node}()
     visited = Vector{node}()
     iter = 0
+    integer = node()
 
     #PUSH ROOT TO STACK
     push!(stack,n)
@@ -185,6 +164,7 @@ function leaf(n::node,upperBound::Float64,maxiter::Float64)
                     #ALWAYS TERMINATE IF INTEGER NODE IS FOUND
                     terminate = true
                     println("we have integer solution.")
+                    integer=u
                 elseif u.status[end] == "EVALUATED"
                     obj = objective_value(master(u))
 
@@ -203,5 +183,5 @@ function leaf(n::node,upperBound::Float64,maxiter::Float64)
         end
     end
 
-    return (stack=stack,visited=visited,upperBound=upperBound)
+    return (stack=stack,visited=visited,upperBound=upperBound,integer=integer)
 end

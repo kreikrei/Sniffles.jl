@@ -27,7 +27,7 @@ function Q(key,R)
         end
 
         return q
-    else
+    elseif isa(key,Vector{β})
         q = Vector{Vector{NamedTuple}}()
 
         for b in key
@@ -39,6 +39,14 @@ function Q(key,R)
         else
             return q
         end
+    else
+        q = Vector{NamedTuple}()
+
+        for r in keys(R), k in keys(b().K), t in b().T
+            push!(q,(r=r,k=k,t=t))
+        end
+
+        return q
     end
 end
 

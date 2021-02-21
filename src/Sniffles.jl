@@ -6,6 +6,7 @@ using DataFrames
 using Distances
 using UUIDs
 using StatsBase
+using Combinatorics
 
 include("struct.jl")
 include("settings.jl")
@@ -44,6 +45,7 @@ export silent
 
 #core.jl
 export Q
+export f
 export s
 export master
 export buildMaster
@@ -59,7 +61,7 @@ export colGen
 export origin
 
 #branch.jl
-export qstack
+export separate
 export Btest
 export integerCheck
 export createBranch

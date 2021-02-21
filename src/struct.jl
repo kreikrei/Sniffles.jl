@@ -108,3 +108,12 @@ struct node
     #STATUS
     status::Vector{String}
 end
+
+function node()
+    return node(
+        uuid1(), uuid1(),
+        Vector{bound}(),Vector{col}(),
+        initStab(),
+        ["UNVISITED"]
+    )
+end
