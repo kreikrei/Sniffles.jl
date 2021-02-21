@@ -66,16 +66,21 @@ struct dval
     σ::JuMP.Containers.DenseAxisArray
 end
 
-struct β
-    q::Symbol
-    i::Int64
-    v::Union{Nothing,Int64}
+struct kt
+    k::Int64
+    t::Int64
+end
+
+struct β{T<:Any,S<:Any}
+    q::T
+    i::S
+    v::S
 end
 
 struct bound
-    B::Vector{β}
-    type::String
-    κ::Int64
+    B::Vector{β} #component bound set
+    type::Symbol #≳ or ≲
+    κ::Int64 #value of aggregation
 end
 
 struct stabilizer
