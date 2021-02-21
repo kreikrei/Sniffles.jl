@@ -39,7 +39,7 @@ function Q(key,R)
         else
             return q
         end
-    else
+    elseif isempty(key)
         q = Vector{NamedTuple}()
 
         for r in keys(R), k in keys(b().K), t in b().T
@@ -292,13 +292,12 @@ function colStructure!(n::node)
         η = @variable(sp, [F[j].B, iter_k, b().T], Bin)
 
         @constraint(sp, [k = iter_k, t = b().T],
-            g[j,k,t] >= 1 - sum(1 - η[e] for e in F[j].B)
+            g[j,k,t] >= 1 - sum(1 - η[e,k,t] for e in F[j].B)
         )
         @constraint(sp, [e = F[j].B, k = iter_k, t = b().T],
-            (maxq(e.q,e.i,k,t) - e.v + 1) * η[e] >=
+            (maxq(e.q,e.i,k,t) - e.v + 1) * η[e,k,t] >=
             (getproperty(q,e.q)[e.i,k,t] - e.v + 1)
         )
-
     end
 
     for j in keys(lB)
