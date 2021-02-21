@@ -51,7 +51,7 @@ export master
 export buildMaster
 export getDuals
 export callSubstruct
-export callMx!
+export computeMax!
 export maxq
 export colStructure!
 export sub

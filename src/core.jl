@@ -180,7 +180,7 @@ end
 const max_component = Ref{Any}(nothing)
 maxq(q::Symbol,i::Int64,k::Int64,t::Int64) = getproperty(max_component[],q)[i,k,t]
 
-function callMx!()
+function computeMax!()
     max_val = col(
         JuMP.Containers.DenseAxisArray{Float64}(undef,keys(b().V),keys(b().K),b().T), #u
         JuMP.Containers.DenseAxisArray{Float64}(undef,keys(b().V),keys(b().K),b().T), #v
