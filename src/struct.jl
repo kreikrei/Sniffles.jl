@@ -110,8 +110,9 @@ struct node
 end
 
 function node()
-    return node(
-        uuid1(), uuid1(),
+    id = uuid1()
+    root = node(
+        id, id,
         Vector{bound}(),Vector{col}(),
         initStab(),
         ["UNVISITED"]
