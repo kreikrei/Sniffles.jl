@@ -291,7 +291,6 @@ function colStructure!(n::node)
     for j in keys(uB)
         k = filter(f -> f.q == :k, F[j].B)[].i #deterime k
         t = filter(f -> f.q == :t, F[j].B)[].i #determine t
-
         unit = filter(f -> !(f.q in [:k,:t]), F[j].B)
 
         η = @variable(sp, [unit], Bin)
@@ -307,7 +306,6 @@ function colStructure!(n::node)
     for j in keys(lB)
         k = filter(f -> f.q == :k, F[j].B)[].i #deterime k
         t = filter(f -> f.q == :t, F[j].B)[].i #determine t
-
         unit = filter(f -> !(f.q in [:k,:t]), F[j].B)
 
         η = @variable(sp, [unit], Bin)
