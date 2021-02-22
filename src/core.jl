@@ -494,8 +494,8 @@ function colGen(n::node;maxCG::Float64,track::Bool)
                     println("price: $(colvals())")
                 end
 
-                if colvals() >= 0
-                    if checkStab(mp) == 0
+                if isapprox(colvals(),0,atol = 1e-8) || colvals() > 0
+                    if isapprox(checkStab(mp),0,atol = 1e-8)
                         terminate = true #action
                         push!(n.status,"EVALUATED") #report
                         if track
