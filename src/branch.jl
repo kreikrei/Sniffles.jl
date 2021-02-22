@@ -62,6 +62,7 @@ function Btest(n::node)
 
     newstack = separate(n)
 
+<<<<<<< HEAD
     for stacks in newstack
         for k in keys(b().K), t in b().T
             for q in [:y,:z,:u,:v]
@@ -80,6 +81,24 @@ function Btest(n::node)
                             if !Sniffles.issinteger(nilaii,1e-8)
                                 return hehe
                             end
+=======
+    for q in [:y,:z,:u,:v]
+        for k in keys(b().K), t in b().T
+            totest = filter(p -> p[1].i == k && p[2].i == t && p[3].q == q,newstack)
+            candidate = [last(p).i for p in totest]
+            cardinality = 1
+
+            while cardinality <= floor(log2(f([],R,θ))) + 1
+                combo = collect(combinations(candidate,cardinality))
+
+                for i in combo
+                    tes = filter(p -> last(p).i in i,totest)
+                    if !isempty(tes)
+                        hehe = reduce(union,tes)
+                        nilaii = s(hehe,R,θ)
+                        if !Sniffles.issinteger(nilaii,1e-8)
+                            return hehe
+>>>>>>> e52615bd26b22b53ff45c202b381aad5e98800a4
                         end
                     end
 
