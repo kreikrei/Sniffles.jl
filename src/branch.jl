@@ -13,7 +13,10 @@ function separate(n::node)
         end
     end
 
-    boundstack = Vector{Vector{β}}() #HITUNG V tiap qi di rkt
+    #println(res)
+
+    minBoundstack = Vector{Vector{β}}() #HITUNG V tiap qi di rkt
+    maxBoundstack = Vector{Vector{β}}()
     for q in [:u,:v,:y,:z]
         for i in keys(b().V), k in keys(b().K), t in b().T
             store = Vector{Int64}() #collect all values contained in rkt
@@ -23,29 +26,34 @@ function separate(n::node)
                     push!(store,val)
                 end
             end
+            unique!(store)
 
             test = Vector{Int64}() #summarize the values, we average 1-by-1
             for w in 1:length(store)-1
                 comp = ceil((store[w] + store[w+1]) / 2)
-                if comp > 0
-                    push!(test,comp)
-                end
+                push!(test,comp)
             end
-            unique!(test) #find the distinct values
-
 
             if !isempty(test)
-                v = findmin(test)[1]
-                new = Vector{β}()
-                push!(new,β(:k,k))
-                push!(new,β(:t,t))
-                push!(new,β(q,i,v))
-                push!(boundstack,new)
+                vmax = findmax(test)[1]
+                vmin = findmin(test)[1]
+
+                newmax = Vector{β}()
+                push!(newmax,β(:k,k))
+                push!(newmax,β(:t,t))
+                push!(newmax,β(q,i,vmax))
+                push!(maxBoundstack,newmax)
+
+                newmin = Vector{β}()
+                push!(newmin,β(:k,k))
+                push!(newmin,β(:t,t))
+                push!(newmin,β(q,i,vmin))
+                push!(minBoundstack,newmin)
             end
         end
     end
 
-    return boundstack
+    return maxBoundstack,minBoundstack
 end
 
 function Btest(n::node)
@@ -54,28 +62,30 @@ function Btest(n::node)
 
     newstack = separate(n)
 
-    for k in keys(b().K), t in b().T
-        for q in [:y,:z,:u,:v]
-            totest = filter(p -> p[1].i == k && p[2].i == t && p[3].q == q,newstack)
-            candidate = [last(p).i for p in totest]
-            cardinality = 1
+    for stacks in newstack
+        for k in keys(b().K), t in b().T
+            for q in [:y,:z,:u,:v]
+                totest = filter(p -> p[1].i == k && p[2].i == t && p[3].q == q,stacks)
+                candidate = [last(p).i for p in totest]
+                cardinality = 1
 
-            while cardinality <= floor(log2(f([],R,θ))) + 1
-                combo = collect(combinations(candidate,cardinality))
+                while cardinality <= floor(log2(f([],R,θ))) + 1
+                    combo = collect(combinations(candidate,cardinality))
 
-                for i in combo
-                    tes = filter(p -> last(p).i in i,totest)
-                    if !isempty(tes)
-                        hehe = reduce(union,tes)
-                        nilaii = s(hehe,R,θ)
-                        if !Sniffles.issinteger(nilaii,1e-8)
-                            return hehe
+                    for i in combo
+                        tes = filter(p -> last(p).i in i,totest)
+                        if !isempty(tes)
+                            hehe = reduce(union,tes)
+                            nilaii = s(hehe,R,θ)
+                            if !Sniffles.issinteger(nilaii,1e-8)
+                                return hehe
+                            end
                         end
                     end
-                end
 
-                #fractional not found increase cardinality
-                cardinality += 1
+                    #fractional not found increase cardinality
+                    cardinality += 1
+                end
             end
         end
     end

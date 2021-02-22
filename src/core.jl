@@ -142,7 +142,7 @@ function buildMaster(n::node)
     )
 
     @constraint(mp, ϵ[k = iter_k, t = b().T],
-        sum(θ[r,k,t] for r in keys(R)) == sum(b().K[k].BP[i] for i in b().K[k].cover)
+        sum(θ[r,k,t] for r in keys(R)) <= sum(b().K[k].BP[i] for i in b().K[k].cover)
     )
 
     @constraint(mp, [i = keys(b().V), t = b().T],
@@ -216,7 +216,7 @@ function colStructure!(n::node)
     if solver_name(sp) == "Gurobi"
         set_optimizer_attribute(sp,"Cuts",2)
         set_optimizer_attribute(sp,"MIPFocus",2)
-        set_optimizer_attribute(sp,"Presolve",2)
+        set_optimizer_attribute(sp,"Threads",2)
         set_optimizer_attribute(sp,"NodefileStart",0.5)
     end
 
@@ -313,7 +313,9 @@ function colStructure!(n::node)
         η = @variable(sp, [unit], Bin)
         @constraint(sp, [e = unit], h[j] <= η[e])
         for e in unit
-            @constraint(sp, e.v * η[e] <= getproperty(q,e.q)[e.i,k,t])
+            @constraint(
+                sp, e.v * η[e] <= getproperty(q,e.q)[e.i,k,t]
+            )
         end
     end
 
