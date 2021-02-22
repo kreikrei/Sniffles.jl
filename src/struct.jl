@@ -66,16 +66,24 @@ struct dval
     σ::JuMP.Containers.DenseAxisArray
 end
 
-struct β
-    q::Symbol
-    i::Int64
-    v::Union{Nothing,Int64}
+struct β{T<:Any,S<:Any}
+    q::T
+    i::S
+    v::S
+end
+
+function β(q::Symbol,i::Int64)
+    if q in [:y,:z,:k,:t]
+        return β(q,i,1)
+    else
+        return β(q,i,0)
+    end
 end
 
 struct bound
-    B::Vector{β}
-    type::String
-    κ::Int64
+    B::Vector{β} #component bound set
+    type::Symbol #≳ or ≲
+    κ::Int64 #value of aggregation
 end
 
 struct stabilizer
@@ -99,4 +107,13 @@ struct node
 
     #STATUS
     status::Vector{String}
+end
+
+function node()
+    return node(
+        uuid1(), uuid1(),
+        Vector{bound}(),Vector{col}(),
+        initStab(),
+        ["UNVISITED"]
+    )
 end
