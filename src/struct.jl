@@ -100,7 +100,7 @@ struct node
 
     #Dynamic SET
     bounds::Vector{bound}
-    columns::Vector{col}
+    columns::Vector{Dict}
 
     #SUPPORT
     stab::stabilizer

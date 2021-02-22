@@ -48,14 +48,12 @@ export Q
 export f
 export s
 export master
-export buildMaster
 export getDuals
-export callSubstruct
 export callMx!
 export maxq
 export colStructure!
+export callSubstruct
 export sub
-export buildSub
 export getCols
 export colGen
 export origin

@@ -22,7 +22,7 @@ function separate(n::node)
             store = Vector{Int64}() #collect all values contained in rkt
             for raw in res
                 if k == raw.k && t == raw.t
-                    val = getproperty(R[raw.r],q)[i,k,t]
+                    val = getproperty(R[raw.r][(k,t)],q)[i]
                     push!(store,val)
                 end
             end
@@ -77,7 +77,7 @@ function Btest(n::node)
                         if !isempty(tes)
                             hehe = reduce(union,tes)
                             nilaii = s(hehe,R,θ)
-                            if !Sniffles.issinteger(nilaii,1e-8)
+                            if !Sniffles.issinteger(nilaii,1e-10)
                                 return hehe
                             end
                         end

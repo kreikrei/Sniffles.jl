@@ -79,26 +79,5 @@ function root(res = b())
         ["UNVISITED"]
     )
 
-    z = JuMP.Containers.DenseAxisArray{Float64}(undef,keys(b().V),keys(b().K),b().T)
-    y = JuMP.Containers.DenseAxisArray{Float64}(undef,keys(b().V),keys(b().K),b().T)
-    u = JuMP.Containers.DenseAxisArray{Float64}(undef,keys(b().V),keys(b().K),b().T)
-    v = JuMP.Containers.DenseAxisArray{Float64}(undef,keys(b().V),keys(b().K),b().T)
-    x = JuMP.Containers.DenseAxisArray{Float64}(
-        undef,collect(keys(b().V)),collect(keys(b().V)),collect(keys(b().K)),b().T
-    )
-    l = JuMP.Containers.DenseAxisArray{Float64}(
-        undef,collect(keys(b().V)),collect(keys(b().V)),collect(keys(b().K)),b().T
-    )
-
-    z .= 0
-    y .= 0
-    x .= 0
-    u .= 0
-    v .= 0
-    l .= 0
-
-    init = col(u,v,l,y,z,x)
-    push!(root.columns,init)
-
     return root
 end
