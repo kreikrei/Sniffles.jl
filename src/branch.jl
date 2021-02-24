@@ -201,7 +201,7 @@ function traverse(max::Float64)
         n = pop!(stack)
 
         #FIND LEAVE (INTEGER NODE) FROM NODE
-        results = leaf(n,upperBound)
+        results = leaf(n,upperBound,Inf)
 
         #USE THE RESULTS
         append!(stack,results.stack)
