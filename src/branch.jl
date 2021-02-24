@@ -147,7 +147,7 @@ function leaf(n::node,upperBound::Float64,maxiter::Float64)
         #CHECK AND PROCESS
         if u.status[end] == "UNVISITED"
             #PROCESS THE NODE
-            @time colGen(u;track=false,maxCG=Inf)
+            colGen(u;track=false,maxCG=Inf)
 
             #NODE STATUSES
             if u.status[end] == "INTEGER"
@@ -166,7 +166,7 @@ function leaf(n::node,upperBound::Float64,maxiter::Float64)
 
                 #BRANCH IF NOT ABOVE uB
                 if obj <= upperBound
-                    @time append!(stack,createBranch(u))
+                    append!(stack,createBranch(u))
                 end
             end
 

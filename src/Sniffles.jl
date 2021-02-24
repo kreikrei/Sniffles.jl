@@ -60,6 +60,7 @@ export origin
 #branch.jl
 export separate
 export Btest
+export leaf
 export integerCheck
 export createBranch
 export traverse
