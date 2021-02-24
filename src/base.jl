@@ -33,7 +33,7 @@ function extract!(path::String;distformula::String) #extract from excel
             end
         elseif distformula == "euclidean"
             if i != j
-                dist[i,j] = euclidean([V[i].x,V[i].y],[V[j].x,V[j].y])
+                dist[i,j] = round(euclidean([V[i].x,V[i].y],[V[j].x,V[j].y]))
             else
                 dist[i,j] = 999999999
             end

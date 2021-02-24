@@ -2,10 +2,7 @@
 #    BRANCHING MECHANISMS
 # =========================================================================
 
-function separate(n::node)
-    R = Dict(1:length(n.columns) .=> n.columns)
-    θ = value.(master(n).obj_dict[:θ])
-
+function separate(R,θ)
     res = Vector{NamedTuple}() #SEMUA RKT yang fractional
     for r in θ.axes[1], k in θ.axes[2], t in θ.axes[3]
         if !isinteger(θ[r,k,t])
@@ -21,59 +18,24 @@ function separate(n::node)
     return group
 end
 
-function Btest(n::node)
-    R = Dict(1:length(n.columns) .=> n.columns)
-    θ = value.(master(n).obj_dict[:θ])
+function Btest(R,θ)
+    fract = separate(R,θ)
 
-    fract = separate(n)
-    for id in keys(fract)
-        stack = Vector{Vector{β}}()
-        key = β[β(:k,id[1]),β(:t,id[2])]
-
-        #GENERATE STACK OF q and i for (k,t)
-        for q in [:u,:v,:y,:z], i in b().K[id[1]].cover
-            store = Vector{Int64}()
-            for r in fract[id]
-                val = Int64(getproperty(R[r][id],q)[i])
-                push!(store,val)
-            end
-            unique!(store) #distinct values of qi
-
-            test = Vector{Int64}()
-            for w in 1:length(store)-1
-                comp = ceil((store[w] + store[w+1]) / 2)
-                push!(test,comp)
-            end #summarize the values of qi
-
-            if !isempty(test)
-                for v in test
-                    push!(stack,vcat(key,[β(q,i,v)]))
-                end
-            end
-        end
-
-        #combination and testing of stack
-        for pair in [[:y,:z],[:u,:v]]
-            cardinality = 1
-            while cardinality <= floor(log2(f([],R,θ))) + 1
-                q_combo = collect(combinations(pair,cardinality))
-                i_combo = collect(combinations(b().K[id[1]].cover,cardinality))
-
-                for q in q_combo, i in i_combo
-                    raw = filter(p -> last(p).i in i && last(p).q in q,stack)
-                    if !isempty(raw)
-                        pure = reduce(union,raw)
-                        val = s(pure,R,θ)
-                        if !Sniffles.issinteger(val,1e-10)
-                            return pure
+    for denom in 1:1000
+        weight = [p/denom for p in 1:denom-1]
+        println(weight)
+        for p in keys(fract)
+            for q in [:y,:z,:u,:v]
+                for i in b().K[p[1]].cover
+                    for v in ceil.(weight .* maxq(q,i,p[1]))
+                        key = β(q,i,p[1],p[2],v)
+                        if !issinteger(s(key,R,θ),1e-8)
+                            return key
                         end
                     end
                 end
-                cardinality += 1
             end
         end
-        #println("k: $(s[1]),t: $(s[2])")
-        #println(stack)
     end
 end
 
@@ -95,12 +57,9 @@ end
 
 function createBranch(n::node)
     branches = Vector{node}()
-    seeds = Btest(n)
-    if isempty(seeds)
-        println("no B to be found")
-    end
     R = Dict(1:length(n.columns) .=> n.columns)
     θ = value.(master(n).obj_dict[:θ])
+    seeds = Btest(R,θ)
 
     for br in [:≳,:≲]
         push!(branches,
