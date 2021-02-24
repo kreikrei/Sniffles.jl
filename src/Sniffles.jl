@@ -5,7 +5,6 @@ using XLSX
 using DataFrames
 using Distances
 using UUIDs
-using StatsBase
 using Combinatorics
 
 include("struct.jl")
