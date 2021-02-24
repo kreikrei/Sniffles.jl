@@ -69,13 +69,23 @@ end
 struct β
     q::Symbol
     i::Int64
-    v::Union{Nothing,Int64}
+    k::Int64
+    t::Int64
+    v::Int64
+end
+
+function β(q::Symbol,i::Int64,k::Int64,t::Int64)
+    if q in [:y,:z]
+        return β(q,i,k,t,1)
+    else
+        return β(q,i,k,t,0)
+    end
 end
 
 struct bound
-    B::Vector{β}
-    type::String
-    κ::Int64
+    β::β #component bound set
+    type::Symbol #≳ or ≲
+    κ::Int64 #value of aggregation
 end
 
 struct stabilizer
@@ -92,11 +102,20 @@ struct node
 
     #Dynamic SET
     bounds::Vector{bound}
-    columns::Vector{col}
+    columns::Vector{Dict}
 
     #SUPPORT
     stab::stabilizer
 
     #STATUS
     status::Vector{String}
+end
+
+function node()
+    return node(
+        uuid1(), uuid1(),
+        Vector{bound}(),Vector{col}(),
+        initStab(),
+        ["UNVISITED"]
+    )
 end
