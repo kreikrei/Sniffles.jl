@@ -63,5 +63,6 @@ export separate
 export Btest
 export integerCheck
 export createBranch
+export traverse
 
 end

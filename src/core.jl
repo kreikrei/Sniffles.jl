@@ -3,6 +3,8 @@
 # =========================================================================
 
 function Q(key,R)
+    passes(i) = [k for k in keys(b().K) if (i in b().K[k].cover)]
+
     if isa(key,β)
         q = Vector{NamedTuple}()
 
@@ -18,8 +20,8 @@ function Q(key,R)
                     push!(q,(r=r,k=k,t=t))
                 end
             end
-        else
-            for r in keys(R), k in keys(b().K), t in b().T
+        elseif key.q in [:u,:v,:y,:z]
+            for r in keys(R), k in passes(key.i), t in b().T
                 if getproperty(R[r][(k,t)],key.q)[key.i] >= key.v
                     push!(q,(r=r,k=k,t=t))
                 end
@@ -122,11 +124,13 @@ function master(n::node)
         ) #stabilizer
     )
 
+    passes(i) = [k for k in keys(b().K) if (i in b().K[k].cover)]
+
     @constraint(mp, λ[i = iter_i, t = b().T],
         I[i,t - 1] +
-        sum(R[r][(k,t)].u[i] * θ[r,k,t] for r in keys(R), k in iter_k) +
+        sum(R[r][(k,t)].u[i] * θ[r,k,t] for r in keys(R), k in passes(i)) +
         slack[i,t] - surp[i,t] ==
-        sum(R[r][(k,t)].v[i] * θ[r,k,t] for r in keys(R), k in iter_k) +
+        sum(R[r][(k,t)].v[i] * θ[r,k,t] for r in keys(R), k in passes(i)) +
         b().d[i,t] + I[i,t]
     )
 
@@ -219,7 +223,9 @@ function colStructure!(n::node)
     # ==========================================
     R = Dict{Tuple,Model}()
 
+    iter_k = Vector{Int64}()
     iter_k = collect(keys(b().K))
+    iter_i = Vector{Int64}()
     iter_i = collect(keys(b().V))
 
     @inbounds for k in iter_k, t in b().T
@@ -233,23 +239,23 @@ function colStructure!(n::node)
             set_optimizer_attribute(sp, "NumericFocus",3)
         end
 
-        @variable(sp, u[iter_i] >= 0, Int)
-        @variable(sp, v[iter_i] >= 0, Int)
-        @variable(sp, l[iter_i, iter_i] >= 0, Int)
-        @variable(sp, y[iter_i], Bin)
-        @variable(sp, z[iter_i], Bin)
-        @variable(sp, x[iter_i, iter_i], Bin)
+        @variable(sp, u[b().K[k].cover] >= 0, Int)
+        @variable(sp, v[b().K[k].cover] >= 0, Int)
+        @variable(sp, l[b().K[k].cover, b().K[k].cover] >= 0, Int)
+        @variable(sp, y[b().K[k].cover], Bin)
+        @variable(sp, z[b().K[k].cover], Bin)
+        @variable(sp, x[b().K[k].cover, b().K[k].cover], Bin)
 
         @constraint(sp,
             sum(u[i] for i in b().K[k].cover) ==
             sum(v[i] for i in b().K[k].cover) #all pickup delivered
         )
 
-        @constraint(sp, [i = b().K[k].cover],
+        @constraint(sp, α[i = b().K[k].cover],
             sum(x[j,i] for j in b().K[k].cover) == y[i] + z[i] #traverse in
         )
 
-        @constraint(sp, [i = b().K[k].cover],
+        @constraint(sp, β[i = b().K[k].cover],
             sum(x[i,j] for j in b().K[k].cover) == y[i] + z[i] #traverse out
         )
 
@@ -258,27 +264,21 @@ function colStructure!(n::node)
             sum(l[i,j] for j in b().K[k].cover) == u[i] - v[i] #load balance
         )
 
-        @constraint(sp, [i = iter_i],
+        @constraint(sp, [i = b().K[k].cover],
             u[i] <= b().K[k].Q * y[i] #u-y corr
         )
 
-        @constraint(sp, [i = iter_i],
+        @constraint(sp, [i = b().K[k].cover],
             v[i] <= b().K[k].Q * z[i] #u-y corr
         )
 
-        @constraint(sp, [i = iter_i, j = iter_i],
+        @constraint(sp, [i = b().K[k].cover, j = b().K[k].cover],
             l[i,j] <= b().K[k].Q * x[i,j] #l-x corr
         )
 
         @constraint(sp,
             sum(z[i] for i in b().K[k].cover) <= 1 #only one starting point
         )
-
-        o = [i for i in iter_i if !(i in b().K[k].cover)] #sets not in cover
-        if !isempty(o)
-            @constraint(sp, [forbidden = o], z[forbidden] == 0)
-            @constraint(sp, [forbidden = o], y[forbidden] == 0)
-        end
 
         # ================================
         #    BOUND IDENTIFICATION
@@ -305,7 +305,7 @@ function colStructure!(n::node)
 
             #IF K AND T CHECKS OUT EXECUTE BOUND
             if included
-                println("upper bound $j included on (k=$k,t=$t).")
+                #println("upper bound $j included on (k=$k,t=$t).")
                 unit = filter(f -> !(f.q in [:k,:t]), F[j].B)
 
                 η = @variable(sp, [unit], Bin)
@@ -334,7 +334,7 @@ function colStructure!(n::node)
 
             #IF K AND T CHECKS OUT EXECUTE BOUND
             if included
-                println("lower bound $j included on (k=$k,t=$t).")
+                #println("lower bound $j included on (k=$k,t=$t).")
                 unit = filter(f -> !(f.q in [:k,:t]), F[j].B)
 
                 η = @variable(sp, [unit], Bin)
@@ -361,7 +361,9 @@ function sub(n::node,duals::dval)
     # ==========================================
     #    ADD OBJECTIVE AND SOLVE (for each kt)
     # ==========================================
+    iter_k = Vector{Int64}()
     iter_k = collect(keys(b().K))
+    iter_i = Vector{Int64}()
     iter_i = collect(keys(b().V))
 
     @inbounds for k in iter_k, t in b().T
@@ -538,7 +540,7 @@ function colGen(n::node;maxCG::Float64,track::Bool)
     else
         if integerCheck(n)
             push!(n.status,"INTEGER")
-            println("NODE $(n.id) INTEGER")
+            println("NODE $(n.self) INTEGER")
         else
             println("NODE $(n.self) FINISHED.")
         end
