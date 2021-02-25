@@ -69,19 +69,12 @@ end
 struct β{T<:Any,S<:Any}
     q::T
     i::S
-    v::S
-end
-
-function β(q::Symbol,i::Int64)
-    if q in [:y,:z,:k,:t]
-        return β(q,i,1)
-    else
-        return β(q,i,0)
-    end
+    k::S
+    t::S
 end
 
 struct bound
-    B::Vector{β} #component bound set
+    β::β #component bound set
     type::Symbol #≳ or ≲
     κ::Int64 #value of aggregation
 end

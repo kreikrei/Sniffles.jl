@@ -19,7 +19,6 @@ export veh
 export dt
 export col
 export dval
-export kt
 export β
 export bound
 export stabilizer
@@ -43,13 +42,9 @@ export silence!
 export silent
 
 #core.jl
-export Q
-export f
 export s
 export master
 export getDuals
-export callMx!
-export maxq
 export colStructure!
 export callSubstruct
 export sub

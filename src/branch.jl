@@ -2,78 +2,15 @@
 #    BRANCHING MECHANISMS
 # =========================================================================
 
-function separate(n::node)
-    R = Dict(1:length(n.columns) .=> n.columns)
-    θ = value.(master(n).obj_dict[:θ])
-
-    res = Vector{NamedTuple}() #SEMUA RKT yang fractional
-    for r in θ.axes[1], k in θ.axes[2], t in θ.axes[3]
-        if !isinteger(θ[r,k,t])
-            push!(res,(r=r,k=k,t=t))
-        end
-    end
-
-    group = Dict{Tuple,Vector{Int64}}()
-    for k in [p.k for p in res], t in [p.t for p in res if p.k == k]
-        group[(k,t)] = [p.r for p in res if p.k == k && p.t == t]
-    end
-
-    return group
-end
-
-function Btest(n::node)
-    R = Dict(1:length(n.columns) .=> n.columns)
-    θ = value.(master(n).obj_dict[:θ])
-
-    fract = separate(n)
-    for id in keys(fract)
-        stack = Vector{Vector{β}}()
-        key = β[β(:k,id[1]),β(:t,id[2])]
-
-        #GENERATE STACK OF q and i for (k,t)
-        for q in [:u,:v,:y,:z], i in b().K[id[1]].cover
-            store = Vector{Int64}()
-            for r in fract[id]
-                val = Int64(getproperty(R[r][id],q)[i])
-                push!(store,val)
-            end
-            unique!(store) #distinct values of qi
-
-            test = Vector{Int64}()
-            for w in 1:length(store)-1
-                comp = ceil((store[w] + store[w+1]) / 2)
-                push!(test,comp)
-            end #summarize the values of qi
-
-            if !isempty(test)
-                for v in test
-                    push!(stack,vcat(key,[β(q,i,v)]))
-                end
+function separate(R,θ)
+    for q in [:y,:z], k in keys(b().K), i in b().K[k].cover, t in reverse(b().T)
+        key = β(q,i,k,t)
+        if !isempty(Q(key,R))
+            val = s(key,R,θ)
+            if !issinteger(val,1e-8)
+                return key
             end
         end
-
-        #combination and testing of stack
-        for pair in [[:y,:z],[:u,:v]]
-            cardinality = 1
-            while cardinality <= floor(log2(f([],R,θ))) + 1
-                q_combo = collect(combinations(pair,cardinality))
-                i_combo = collect(combinations(b().K[id[1]].cover,cardinality))
-
-                for q in q_combo, i in i_combo
-                    raw = filter(p -> last(p).i in i && last(p).q in q,stack)
-                    if !isempty(raw)
-                        pure = reduce(union,raw)
-                        val = s(pure,R,θ)
-                        if !Sniffles.issinteger(val,1e-10)
-                            return pure
-                        end
-                    end
-                end
-                cardinality += 1
-            end
-        end
-        #println("k: $(s[1]),t: $(s[2])")
-        #println(stack)
     end
 end
 
@@ -81,9 +18,10 @@ issinteger(val,tol) = abs(round(val) - val) < tol
 
 function integerCheck(n::node)
     integer = true
-    θ = value.(master(n).obj_dict[:θ])
+    ori = origin(n)
 
-    for val in θ
+    for q in [:u,:v,:y,:z], k in keys(b().K), i in b().K[k].cover, t in b().T
+        val = getproperty(ori,q)[i,k,t]
         if !issinteger(val,1e-8)
             integer = false
             break
@@ -95,14 +33,13 @@ end
 
 function createBranch(n::node)
     branches = Vector{node}()
-    seeds = Btest(n)
-    if isempty(seeds)
-        println("no B to be found")
-    end
     R = Dict(1:length(n.columns) .=> n.columns)
     θ = value.(master(n).obj_dict[:θ])
 
-    for br in [:≳,:≲]
+    seeds = separate(R,θ)
+    println("branch on $seeds: $(s(seeds,R,θ))")
+
+    for br in [:≲,:≳]
         push!(branches,
             node(
                 n.self, #parent
@@ -147,7 +84,7 @@ function leaf(n::node,upperBound::Float64,maxiter::Float64)
         #CHECK AND PROCESS
         if u.status[end] == "UNVISITED"
             #PROCESS THE NODE
-            colGen(u;track=false,maxCG=Inf)
+            colGen(u;track=true,maxCG=Inf)
 
             #NODE STATUSES
             if u.status[end] == "INTEGER"
@@ -161,6 +98,7 @@ function leaf(n::node,upperBound::Float64,maxiter::Float64)
 
                 #ALWAYS TERMINATE IF INTEGER NODE IS FOUND
                 terminate = true
+                println("found integer.")
             elseif u.status[end] == "EVALUATED"
                 obj = objective_value(master(u))
 
