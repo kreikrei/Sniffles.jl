@@ -5,7 +5,7 @@
 const template_data = Ref{Any}(nothing)
 b() = template_data[] #buat manggil dt default
 
-function extract!(path::String) #extract from excel
+function extract!(path::String;distformula::String) #extract from excel
     xf = XLSX.readxlsx(path) #READ WORKSHEET
     data = Dict{Symbol,DataFrame}() #DATAFRAME DICT
 
@@ -25,10 +25,18 @@ function extract!(path::String) #extract from excel
 
     dist = JuMP.Containers.DenseAxisArray{Float64}(undef, keys(V), keys(V))
     for i in keys(V), j in keys(V)
-        if i != j
-            dist[i,j] = haversine([V[i].x,V[i].y],[V[j].x,V[j].y],6378.137)
-        else
-            dist[i,j] = 999999999
+        if distformula == "haversine"
+            if i != j
+                dist[i,j] = haversine([V[i].x,V[i].y],[V[j].x,V[j].y],6378.137)
+            else
+                dist[i,j] = 999999999
+            end
+        elseif distformula == "euclidean"
+            if i != j
+                dist[i,j] = euclidean([V[i].x,V[i].y],[V[j].x,V[j].y])
+            else
+                dist[i,j] = 999999999
+            end
         end
     end
 

@@ -5,11 +5,13 @@ using XLSX
 using DataFrames
 using Distances
 using UUIDs
+using Combinatorics
 
 include("struct.jl")
 include("settings.jl")
 include("base.jl")
 include("core.jl")
+include("branch.jl")
 
 #struct.jl
 export vtx
@@ -40,20 +42,22 @@ export silence!
 export silent
 
 #core.jl
-export rmax
-export callMax!
-export Q
-export f
-export tot
+export s
 export master
-export buildMaster
 export getDuals
+export colStructure!
+export callSubstruct
 export sub
-export colStructure
-export callSub!
-export buildSub
 export getCols
 export colGen
 export origin
+
+#branch.jl
+export separate
+export Btest
+export leaf
+export integerCheck
+export createBranch
+export traverse
 
 end
