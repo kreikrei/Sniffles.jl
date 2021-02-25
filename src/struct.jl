@@ -75,7 +75,7 @@ struct β{T<:Any,S<:Any}
 end
 
 struct bound
-    β::β #component bound set
+    B::Vector{β} #component bound set
     type::Symbol #≳ or ≲
     κ::Int64 #value of aggregation
 end

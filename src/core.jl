@@ -246,11 +246,11 @@ function colStructure!(n::node)
         q = col(u,v,l,y,z,x)
 
         for j in keys(uB)
-            @constraint(sp, g[j] >= getproperty(q,F[j].β.q)[F[j].β.i])
+            @constraint(sp, (1 - F[j].β.v + 1) * g[j] >= getproperty(q,F[j].β.q)[F[j].β.i] - F[j].β.v + 1)
         end
 
         for j in keys(lB)
-            @constraint(sp, h[j] <= getproperty(q,F[j].β.q)[F[j].β.i])
+            @constraint(sp, F[j].β.v * h[j] <= getproperty(q,F[j].β.q)[F[j].β.i])
         end
 
         optimize!(sp) #first call biar model kebuild

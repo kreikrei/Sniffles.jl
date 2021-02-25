@@ -2,13 +2,29 @@
 #    BRANCHING MECHANISMS
 # =========================================================================
 
-function separate(R,θ)
-    for q in [:y,:z], k in keys(b().K), i in b().K[k].cover, t in reverse(b().T), v in [0,1]
+function separate(bounds,R,θ)
+    #FIND Zs TO BRANCH
+    for q in [:z], k in keys(b().K), i in b().K[k].cover, t in b().T, v in 1
         key = β(q,i,k,t,v)
+
         if !isempty(Q(key,R))
             val = s(key,R,θ)
             if !issinteger(val,1e-8)
                 return key
+            end
+        end
+    end
+
+    #STARTING FROM Z IN EACH BOUND FIND Y
+    for j in bounds
+        for q in [:y], k in j.k, i in b().K[k].cover, t in j.t, v in 1
+            key = vcat(j,β(q,i,k,t,v))
+
+            if !isempty(Q(key,R))
+                val = s(key,R,θ)
+                if !issinteger(val,1e-8)
+                    return key
+                end
             end
         end
     end
