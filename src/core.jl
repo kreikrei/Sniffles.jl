@@ -257,7 +257,7 @@ function colStructure!(n::node)
 
         for j in keys(uB)
             η = @variable(sp, [F[j].B], Bin)
-            @constraint(sp, -g[j] >= 1 - sum(1 - η[e] for e in F[j].B))
+            @constraint(sp, g[j] >= 1 - sum(1 - η[e] for e in F[j].B))
             @constraint(sp, [e = F[j].B], (1 - e.v + 1) * η[e] >= getproperty(q,e.q)[e.i] - e.v + 1)
         end
 
