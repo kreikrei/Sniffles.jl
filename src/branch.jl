@@ -3,11 +3,10 @@
 # =========================================================================
 
 function separate(bounds,R,θ)
-    #FIND Zs TO BRANCH
-    for q in [:z,:y], k in keys(b().K), i in b().K[k].cover, t in b().T, v in 1
-        key = β[β(q,i,k,t,v)]
-
-        if !isempty(Q(key,R))
+    #FIND x TO BRANCH
+    for k in keys(b().K), t in b().T
+        for i in b().K[k].cover, j in b().K[k].cover
+            key = β[β(:x,i,j,k,t,1)]
             val = s(key,R,θ)
             if !issinteger(val,1e-8)
                 return key
@@ -15,14 +14,11 @@ function separate(bounds,R,θ)
         end
     end
 
-    println("no single")
-
-    #STARTING FROM Z IN EACH BOUND FIND Y
-    for j in bounds
-        for q in [:z,:y], k in j.B[1].k, i in b().K[k].cover, t in j.B[1].t, v in 1
-            key = vcat(j.B,β(q,i,k,t,v))
-
-            if !isempty(Q(key,R))
+    #FIND l TO BRANCH
+    for k in keys(b().K), t in b().T
+        for i in b().K[k].cover, j in b().K[k].cover
+            for v in LV(i,j,k,t,R,θ)
+                key = β[β(:l,i,j,k,t,v)]
                 val = s(key,R,θ)
                 if !issinteger(val,1e-8)
                     return key
@@ -32,27 +28,22 @@ function separate(bounds,R,θ)
     end
 end
 
+function LV(i::Int64,j::Int64,k::Int64,t::Int64,R,θ)
+    
+
+    return test
+end
+
 issinteger(val,tol) = abs(round(val) - val) < tol
 
 function integerCheck(n::node)
     integer = true
-    ori = origin(n)
+    θ = value.(master(n).obj_dict[:θ])
 
-    for q in [:x,:y,:z], k in keys(b().K), i in b().K[k].cover, t in b().T
-        if q == :x
-            for j in b().K[k].cover
-                val = getproperty(ori,q)[i,j,k,t]
-                if !issinteger(val,1e-8)
-                    integer = false
-                    break
-                end
-            end
-        else
-            val = getproperty(ori,q)[i,k,t]
-            if !issinteger(val,1e-8)
-                integer = false
-                break
-            end
+    for val in θ
+        if !issinteger(val,1e-8)
+            integer = false
+            break
         end
     end
 
