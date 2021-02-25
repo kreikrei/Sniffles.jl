@@ -2,15 +2,25 @@
 #    CORE FUNCTIONS AND MECHANISMS
 # =========================================================================
 function Q(key,R)
-    q = Vector{NamedTuple}()
-
-    for r in keys(R)
-        if getproperty(R[r][(key.k,key.t)],key.q)[key.i] >= key.v
-            push!(q,(r=r,k=key.k,t=key.t))
+    if isa(key,β)
+        q = Vector{NamedTuple}()
+        for r in keys(R)
+            if getproperty(R[r][(key.k,key.t)],key.q)[key.i] >= key.v
+                push!(q,(r=r,k=key.k,t=key.t))
+            end
+        end
+        return q
+    elseif isa(key,Vector{β})
+        q = Vector{Vector{NamedTuple}}()
+        for b in key
+            push!(q,Q(b,R))
+        end
+        if !isempty(q)
+            return reduce(intersect,q)
+        else
+            return q
         end
     end
-
-    return q
 end
 
 function f(key,R,θ)
@@ -110,8 +120,8 @@ function master(n::node)
     uB = filter(f -> last(f).type == :≲,F)
     lB = filter(f -> last(f).type == :≳,F)
 
-    @constraint(mp, ρ[j = keys(uB)], sum(θ[q.r,q.k,q.t] for q in Q(F[j].β,R)) <= F[j].κ)
-    @constraint(mp, σ[j = keys(lB)], sum(θ[q.r,q.k,q.t] for q in Q(F[j].β,R)) >= F[j].κ)
+    @constraint(mp, ρ[j = keys(uB)], sum(θ[q.r,q.k,q.t] for q in Q(F[j].B,R)) <= F[j].κ)
+    @constraint(mp, σ[j = keys(lB)], sum(θ[q.r,q.k,q.t] for q in Q(F[j].B,R)) >= F[j].κ)
 
     optimize!(mp)
 
@@ -237,8 +247,8 @@ function colStructure!(n::node)
         #    BOUND IDENTIFICATION
         # ================================
         F = Dict(1:length(n.bounds) .=> n.bounds)
-        uB = filter(f -> last(f).type == :≲ && last(f).β.k == k && last(f).β.t == t,F)
-        lB = filter(f -> last(f).type == :≳ && last(f).β.k == k && last(f).β.t == t,F)
+        uB = filter(f -> last(f).type == :≲ && last(f).B[1].k == k && last(f).B[1].t == t,F)
+        lB = filter(f -> last(f).type == :≳ && last(f).B[1].k == k && last(f).B[1].t == t,F)
 
         @variable(sp, g[keys(uB)], Bin)
         @variable(sp, h[keys(lB)], Bin)
