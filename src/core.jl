@@ -408,7 +408,7 @@ function colGen(n::node;maxCG::Float64,track::Bool)
                             println("EVALUATED")
                         end
                     else
-                        updateStab!(n.stab,0.5) #action
+                        updateStab!(n.stab,0.8) #action
                         push!(n.status,"STABILIZED") #report
                         if track
                             println("STABILIZED")
