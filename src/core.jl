@@ -17,8 +17,10 @@ function Q(key,R)
         end
         if !isempty(q)
             return reduce(intersect,q)
+            println("test")
         else
             return q
+            println("test")
         end
     end
 end
@@ -256,11 +258,16 @@ function colStructure!(n::node)
         q = col(u,v,l,y,z,x)
 
         for j in keys(uB)
-            @constraint(sp, (1 - F[j].β.v + 1) * g[j] >= getproperty(q,F[j].β.q)[F[j].β.i] - F[j].β.v + 1)
+            println(F[j].B)
+            η = @variable(sp, [e = F[j].B], Bin)
+            @constraint(sp, g[j] >= 1 - sum(1 - η[e] for e in F[j].B))
+            @constraint(sp, [e = F[j].B], (1 - e + 1) * η[e] >= getproperty(q,e.q)[e.i] - e.v + 1)
         end
 
         for j in keys(lB)
-            @constraint(sp, F[j].β.v * h[j] <= getproperty(q,F[j].β.q)[F[j].β.i])
+            η = @variable(sp, [e = F[j].B], Bin)
+            @constraint(sp, [e = F[j].B], h[j] <= η[e])
+            @constraint(sp, [e = F[j].B], e.v * η[e] <= getproperty(q,e.q)[e.i])
         end
 
         optimize!(sp) #first call biar model kebuild
@@ -288,8 +295,8 @@ function sub(n::node,duals::dval)
         #    BOUND IDENTIFICATION
         # ================================
         F = Dict(1:length(n.bounds) .=> n.bounds)
-        uB = filter(f -> last(f).type == :≲ && last(f).β.k == k && last(f).β.t == t,F)
-        lB = filter(f -> last(f).type == :≳ && last(f).β.k == k && last(f).β.t == t,F)
+        uB = filter(f -> last(f).type == :≲ && last(f).B[1].k == k && last(f).B[1].t == t,F)
+        lB = filter(f -> last(f).type == :≳ && last(f).B[1].k == k && last(f).B[1].t == t,F)
 
         #ADD OBJECTIVE
         @objective(sp, Min,

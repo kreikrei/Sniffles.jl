@@ -5,7 +5,7 @@
 function separate(bounds,R,θ)
     #FIND Zs TO BRANCH
     for q in [:z], k in keys(b().K), i in b().K[k].cover, t in b().T, v in 1
-        key = β(q,i,k,t,v)
+        key = β[β(q,i,k,t,v)]
 
         if !isempty(Q(key,R))
             val = s(key,R,θ)
@@ -17,8 +17,9 @@ function separate(bounds,R,θ)
 
     #STARTING FROM Z IN EACH BOUND FIND Y
     for j in bounds
-        for q in [:y], k in j.k, i in b().K[k].cover, t in j.t, v in 1
-            key = vcat(j,β(q,i,k,t,v))
+        for q in [:y], k in j.B[1].k, i in b().K[k].cover, t in j.B[1].t, v in 1
+            key = vcat(j.B,β(q,i,k,t,v))
+            println(key)
 
             if !isempty(Q(key,R))
                 val = s(key,R,θ)
