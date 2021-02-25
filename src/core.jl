@@ -1,71 +1,24 @@
 # =========================================================================
 #    CORE FUNCTIONS AND MECHANISMS
 # =========================================================================
-
 function Q(key,R)
-    passes(i) = [k for k in keys(b().K) if (i in b().K[k].cover)]
+    q = Vector{NamedTuple}()
 
-    if isa(key,β)
-        q = Vector{NamedTuple}()
-
-        if key.q == :k
-            for r in keys(R), k in keys(b().K), t in b().T
-                if k == key.i #CARI VEHICLE
-                    push!(q,(r=r,k=k,t=t))
-                end
-            end
-        elseif key.q == :t
-            for r in keys(R), k in keys(b().K), t in b().T
-                if t == key.i #CARI PERIOD
-                    push!(q,(r=r,k=k,t=t))
-                end
-            end
-        elseif key.q in [:u,:v,:y,:z]
-            for r in keys(R), k in passes(key.i), t in b().T
-                if getproperty(R[r][(k,t)],key.q)[key.i] >= key.v
-                    push!(q,(r=r,k=k,t=t))
-                end
-            end
+    for r in keys(R)
+        if getproperty(R[r][(key.k,key.t)],key.q)[key.i] >= key.v
+            push!(q,(r=r,k=key.k,t=key.t))
         end
-
-        return q
-    elseif isa(key,Vector{β})
-        q = Vector{Vector{NamedTuple}}()
-
-        for b in key
-            push!(q,Q(b,R))
-        end
-
-        if !isempty(q)
-            return reduce(intersect,q)
-        else
-            return q
-        end
-    else
-        q = Vector{NamedTuple}()
-
-        for r in keys(R), k in keys(b().K), t in b().T
-            push!(q,(r=r,k=k,t=t))
-        end
-
-        return q
     end
+
+    return q
 end
 
 function f(key,R,θ)
-    if !isempty(Q(key,R))
-        return sum(θ[q.r,q.k,q.t] - floor(θ[q.r,q.k,q.t]) for q in Q(key,R))
-    else
-        return 0
-    end
+    return sum(θ[q.r,q.k,q.t] - floor(θ[q.r,q.k,q.t]) for q in Q(key,R))
 end
 
 function s(key,R,θ)
-    if !isempty(Q(key,R))
-        return sum(θ[q.r,q.k,q.t] for q in Q(key,R))
-    else
-        return 0
-    end
+    return sum(θ[q.r,q.k,q.t] for q in Q(key,R))
 end
 
 function master(n::node)
@@ -157,8 +110,8 @@ function master(n::node)
     uB = filter(f -> last(f).type == :≲,F)
     lB = filter(f -> last(f).type == :≳,F)
 
-    @constraint(mp, ρ[j = keys(uB)], sum(θ[q.r,q.k,q.t] for q in Q(F[j].B,R)) <= F[j].κ)
-    @constraint(mp, σ[j = keys(lB)], sum(θ[q.r,q.k,q.t] for q in Q(F[j].B,R)) >= F[j].κ)
+    @constraint(mp, ρ[j = keys(uB)], sum(θ[q.r,q.k,q.t] for q in Q(F[j].β,R)) <= F[j].κ)
+    @constraint(mp, σ[j = keys(lB)], sum(θ[q.r,q.k,q.t] for q in Q(F[j].β,R)) >= F[j].κ)
 
     optimize!(mp)
 
@@ -284,8 +237,8 @@ function colStructure!(n::node)
         #    BOUND IDENTIFICATION
         # ================================
         F = Dict(1:length(n.bounds) .=> n.bounds)
-        uB = filter(f -> last(f).type == :≲,F)
-        lB = filter(f -> last(f).type == :≳,F)
+        uB = filter(f -> last(f).type == :≲ && last(f).β.k == k && last(f).β.t == t,F)
+        lB = filter(f -> last(f).type == :≳ && last(f).β.k == k && last(f).β.t == t,F)
 
         @variable(sp, g[keys(uB)], Bin)
         @variable(sp, h[keys(lB)], Bin)
@@ -293,60 +246,11 @@ function colStructure!(n::node)
         q = col(u,v,l,y,z,x)
 
         for j in keys(uB)
-            inclusion = filter(f -> f.q in [:k,:t], F[j].B)
-            included = true
-            if !isempty(inclusion)
-                for f in inclusion
-                    if (f.q == :k && f.i != k) || (f.q == :t && f.i != t)
-                        included = false
-                    end
-                end
-            end
-
-            #IF K AND T CHECKS OUT EXECUTE BOUND
-            if included
-                #println("upper bound $j included on (k=$k,t=$t).")
-                unit = filter(f -> !(f.q in [:k,:t]), F[j].B)
-
-                η = @variable(sp, [unit], Bin)
-                @constraint(sp, g[j] >= 1 - sum(1 - η[e] for e in unit))
-                for e in unit
-                    @constraint(sp,
-                        (maxq(e.q,e.i,k) - e.v + 1) * η[e] >=
-                        (getproperty(q,e.q)[e.i] - e.v + 1)
-                    )
-                end
-            else
-                @constraint(sp, g[j] == 0)
-            end
+            @constraint(sp, g[j] >= getproperty(q,F[j].β.q)[F[j].β.i])
         end
 
         for j in keys(lB)
-            inclusion = filter(f -> f.q in [:k,:t], F[j].B)
-            included = true
-            if !isempty(inclusion)
-                for f in inclusion
-                    if (f.q == :k && f.i != k) || (f.q == :t && f.i != t)
-                        included = false
-                    end
-                end
-            end
-
-            #IF K AND T CHECKS OUT EXECUTE BOUND
-            if included
-                #println("lower bound $j included on (k=$k,t=$t).")
-                unit = filter(f -> !(f.q in [:k,:t]), F[j].B)
-
-                η = @variable(sp, [unit], Bin)
-                @constraint(sp, [e = unit], h[j] <= η[e])
-                for e in unit
-                    @constraint(
-                        sp, e.v * η[e] <= getproperty(q,e.q)[e.i]
-                    )
-                end
-            else
-                @constraint(sp, h[j] == 0)
-            end
+            @constraint(sp, h[j] <= getproperty(q,F[j].β.q)[F[j].β.i])
         end
 
         optimize!(sp) #first call biar model kebuild
@@ -374,8 +278,8 @@ function sub(n::node,duals::dval)
         #    BOUND IDENTIFICATION
         # ================================
         F = Dict(1:length(n.bounds) .=> n.bounds)
-        uB = filter(f -> last(f).type == :≲,F)
-        lB = filter(f -> last(f).type == :≳,F)
+        uB = filter(f -> last(f).type == :≲ && last(f).β.k == k && last(f).β.t == t,F)
+        lB = filter(f -> last(f).type == :≳ && last(f).β.k == k && last(f).β.t == t,F)
 
         #ADD OBJECTIVE
         @objective(sp, Min,
@@ -478,7 +382,7 @@ end
 function colGen(n::node;maxCG::Float64,track::Bool)
     terminate = false
     iter = 0
-    colStructure!(n) #defines the structure of the node
+    colStructure!(n)
 
     while !terminate
         if iter < maxCG
@@ -561,20 +465,27 @@ function origin(n::node)
         undef,collect(keys(b().V)),collect(keys(b().V)),collect(keys(b().K)),b().T
     )
 
+    z .= 0
+    y .= 0
+    u .= 0
+    v .= 0
+    l .= 0
+    x .= 0
+
     R = Dict(1:length(n.columns) .=> n.columns)
     mp = master(n)
     θ = mp.obj_dict[:θ]
 
-    for i in keys(b().V), k in keys(b().K), t in b().T
-        z[i,k,t] = value(sum(R[r].z[i,k,t] * θ[r,k,t] for r in keys(R)))
-        y[i,k,t] = value(sum(R[r].y[i,k,t] * θ[r,k,t] for r in keys(R)))
-        u[i,k,t] = value(sum(R[r].u[i,k,t] * θ[r,k,t] for r in keys(R)))
-        v[i,k,t] = value(sum(R[r].v[i,k,t] * θ[r,k,t] for r in keys(R)))
+    @inbounds for k in keys(b().K), i in b().K[k].cover,t in b().T
+        z[i,k,t] = value(sum(R[r][(k,t)].z[i] * θ[r,k,t] for r in keys(R)))
+        y[i,k,t] = value(sum(R[r][(k,t)].y[i] * θ[r,k,t] for r in keys(R)))
+        u[i,k,t] = value(sum(R[r][(k,t)].u[i] * θ[r,k,t] for r in keys(R)))
+        v[i,k,t] = value(sum(R[r][(k,t)].v[i] * θ[r,k,t] for r in keys(R)))
+    end
 
-        for j in keys(b().V)
-            x[i,j,k,t] = value(sum(R[r].x[i,j,k,t] * θ[r,k,t] for r in keys(R)))
-            l[i,j,k,t] = value(sum(R[r].l[i,j,k,t] * θ[r,k,t] for r in keys(R)))
-        end
+    @inbounds for k in keys(b().K), i in b().K[k].cover,t in b().T, j in b().K[k].cover
+        x[i,j,k,t] = value(sum(R[r][(k,t)].x[i,j] * θ[r,k,t] for r in keys(R)))
+        l[i,j,k,t] = value(sum(R[r][(k,t)].l[i,j] * θ[r,k,t] for r in keys(R)))
     end
 
     return col(
