@@ -5,7 +5,7 @@ function Q(key,R)
     if isa(key,β)
         q = Vector{NamedTuple}()
         for r in keys(R)
-            if getproperty(R[r][(key.k,key.t)],key.q)[key.i] >= key.v
+            if getproperty(R[r][(key.k,key.t)],key.q)[key.i,key.j] >= key.v
                 push!(q,(r=r,k=key.k,t=key.t))
             end
         end
@@ -24,11 +24,19 @@ function Q(key,R)
 end
 
 function f(key,R,θ)
-    return sum(θ[q.r,q.k,q.t] - floor(θ[q.r,q.k,q.t]) for q in Q(key,R))
+    if !isempty(Q(key,R))
+        return sum(θ[q.r,q.k,q.t] - floor(θ[q.r,q.k,q.t]) for q in Q(key,R))
+    else
+        return 0
+    end
 end
 
 function s(key,R,θ)
-    return sum(θ[q.r,q.k,q.t] for q in Q(key,R))
+    if !isempty(Q(key,R))
+        return sum(θ[q.r,q.k,q.t] for q in Q(key,R))
+    else
+        return 0
+    end
 end
 
 function master(n::node)
@@ -140,7 +148,7 @@ function getDuals(mp::Model)
 end
 
 const max_component = Ref{Any}(nothing)
-maxq(q::Symbol,i::Int64,k::Int64) = getproperty(max_component[],q)[i,k]
+maxq(q::Symbol,i::Int64,j::Int64,k::Int64) = getproperty(max_component[],q)[i,j,k]
 
 function callMx!()
     max_val = col(
@@ -258,13 +266,19 @@ function colStructure!(n::node)
         for j in keys(uB)
             η = @variable(sp, [F[j].B], Bin)
             @constraint(sp, g[j] >= 1 - sum(1 - η[e] for e in F[j].B))
-            @constraint(sp, [e = F[j].B], (1 - e.v + 1) * η[e] >= getproperty(q,e.q)[e.i] - e.v + 1)
+            @constraint(sp, [e = F[j].B],
+                (maxq(e.q,e.i,e.j,e.k) - e.v + 1) * η[e] >=
+                (getproperty(q,e.q)[e.i,e.j] - e.v + 1)
+            )
         end
 
         for j in keys(lB)
             η = @variable(sp, [F[j].B], Bin)
             @constraint(sp, [e = F[j].B], h[j] <= η[e])
-            @constraint(sp, [e = F[j].B], e.v * η[e] <= getproperty(q,e.q)[e.i])
+            @constraint(sp, [e = F[j].B],
+                e.v * η[e] <=
+                getproperty(q,e.q)[e.i,e.j]
+            )
         end
 
         optimize!(sp) #first call biar model kebuild

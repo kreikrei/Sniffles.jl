@@ -69,6 +69,7 @@ end
 struct β{T<:Any,S<:Any}
     q::T
     i::S
+    j::S
     k::S
     t::S
     v::S
