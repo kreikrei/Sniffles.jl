@@ -4,7 +4,7 @@
 
 function separate(bounds,R,θ)
     #FIND Zs TO BRANCH
-    for q in [:z], k in keys(b().K), i in b().K[k].cover, t in b().T, v in 1
+    for q in [:z,:y], k in keys(b().K), i in b().K[k].cover, t in b().T, v in 1
         key = β[β(q,i,k,t,v)]
 
         if !isempty(Q(key,R))
@@ -15,11 +15,12 @@ function separate(bounds,R,θ)
         end
     end
 
+    println("no single")
+
     #STARTING FROM Z IN EACH BOUND FIND Y
     for j in bounds
-        for q in [:y], k in j.B[1].k, i in b().K[k].cover, t in j.B[1].t, v in 1
+        for q in [:z,:y], k in j.B[1].k, i in b().K[k].cover, t in j.B[1].t, v in 1
             key = vcat(j.B,β(q,i,k,t,v))
-            println(key)
 
             if !isempty(Q(key,R))
                 val = s(key,R,θ)
@@ -37,11 +38,21 @@ function integerCheck(n::node)
     integer = true
     ori = origin(n)
 
-    for q in [:u,:v,:y,:z], k in keys(b().K), i in b().K[k].cover, t in b().T
-        val = getproperty(ori,q)[i,k,t]
-        if !issinteger(val,1e-8)
-            integer = false
-            break
+    for q in [:x,:y,:z], k in keys(b().K), i in b().K[k].cover, t in b().T
+        if q == :x
+            for j in b().K[k].cover
+                val = getproperty(ori,q)[i,j,k,t]
+                if !issinteger(val,1e-8)
+                    integer = false
+                    break
+                end
+            end
+        else
+            val = getproperty(ori,q)[i,k,t]
+            if !issinteger(val,1e-8)
+                integer = false
+                break
+            end
         end
     end
 
@@ -53,7 +64,7 @@ function createBranch(n::node)
     R = Dict(1:length(n.columns) .=> n.columns)
     θ = value.(master(n).obj_dict[:θ])
 
-    seeds = separate(R,θ)
+    seeds = separate(n.bounds,R,θ)
     println("branch on $seeds: $(s(seeds,R,θ))")
 
     for br in [:≲,:≳]
