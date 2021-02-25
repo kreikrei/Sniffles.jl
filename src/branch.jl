@@ -29,7 +29,26 @@ function separate(bounds,R,θ)
 end
 
 function LV(i::Int64,j::Int64,k::Int64,t::Int64,R,θ)
-    
+    res = Vector{Int64}()
+    for r in keys(R)
+        if !isinteger(θ[r,k,t])
+            push!(res,r)
+        end
+    end
+
+    store = Vector{Int64}() #collect all values contained in rkt
+    for r in res
+        val = getproperty(R[r][(k,t)],:l)[i,j]
+        push!(store,val)
+    end
+
+    unique!(store)
+
+    test = Vector{Int64}() #summarize the values, we average 1-by-1
+    for w in 1:length(store)-1
+        comp = ceil((store[w] + store[w+1]) / 2)
+        push!(test,comp)
+    end
 
     return test
 end
