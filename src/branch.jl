@@ -8,7 +8,6 @@ function separate(R,θ)
         if !isempty(Q(key,R))
             val = s(key,R,θ)
             if !issinteger(val,1e-8)
-                println("new")
                 return key
             end
         end
