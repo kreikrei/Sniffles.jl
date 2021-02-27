@@ -52,7 +52,9 @@ function master(n::node)
     # ================================
     #    MODEL CONSTRUCTION
     # ================================
+    iter_k = Vector{Int64}()
     iter_k = collect(keys(b().K))
+    iter_i = Vector{Int64}()
     iter_i = collect(keys(b().V))
 
     @variable(mp, θ[keys(R), iter_k, b().T] >= 0)
