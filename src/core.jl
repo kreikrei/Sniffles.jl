@@ -214,7 +214,7 @@ function colStructure!(n::node)
         @variable(sp, v[b().K[k].cover] >= 0, Int)
         @variable(sp, l[b().K[k].cover, b().K[k].cover] >= 0, Int)
         @variable(sp, y[b().K[k].cover], Bin)
-        @variable(sp, z[b().K[k].cover], Bin)
+        @variable(sp, z[i = b().K[k].cover], Bin)
         @variable(sp, x[b().K[k].cover, b().K[k].cover], Bin)
 
         @constraint(sp,

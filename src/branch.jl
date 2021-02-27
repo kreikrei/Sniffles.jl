@@ -3,26 +3,33 @@
 # =========================================================================
 
 function separate(bounds,R,θ)
+    fract = Vector{NamedTuple}()
+    for r in keys(R), k in keys(b().K), t in b().T
+        if !isinteger(θ[r,k,t])
+            push!(fract,(k=k,t=t))
+        end
+    end
+
     #FIND x TO BRANCH
-    for k in keys(b().K), t in b().T
-        for i in b().K[k].cover, j in b().K[k].cover
-            key = β[β(:x,i,j,k,t,1)]
+    for f in fract
+        for i1 in b().K[f.k].cover, j1 in b().K[f.k].cover, v in [0,1] #,i2 in b().K[f.k].cover, j2 in b().K[f.k].cover
+            #if (i1,j1) != (i2,j2)
+            key = β[β(:x,i1,j1,f.k,f.t,v)] #,β(:x,i2,j2,f.k,f.t,1)]
             val = s(key,R,θ)
             if !issinteger(val,1e-8)
                 return key
             end
+            #end
         end
     end
 
-    #FIND l TO BRANCH
-    for k in keys(b().K), t in b().T
-        for i in b().K[k].cover, j in b().K[k].cover
-            for v in LV(i,j,k,t,R,θ)
-                key = β[β(:l,i,j,k,t,v)]
-                val = s(key,R,θ)
-                if !issinteger(val,1e-8)
-                    return key
-                end
+    for p in bounds
+        for i in b().K[p.B[1].k].cover, j in b().K[p.B[1].k].cover
+            key = vcat(p.B,β(:x,i,j,p.B[1].k,p.B[1].t,1))
+            println(key)
+            val = s(key,R,θ)
+            if !issinteger(val,1e-8)
+                return key
             end
         end
     end
@@ -57,6 +64,28 @@ issinteger(val,tol) = abs(round(val) - val) < tol
 
 function integerCheck(n::node)
     integer = true
+    ori = origin(n)
+
+    for q in [:y,:z], k in keys(b().K), t in b().T, i in b().K[k].cover
+        val = getproperty(ori,q)[i,k,t]
+        if !issinteger(val,1e-8)
+            integer = false
+            break
+        end
+        for j in b().K[k].cover
+            val = ori.x[i,j,k,t]
+            if !issinteger(val,1e-8)
+                integer = false
+                break
+            end
+        end
+    end
+
+    return integer
+end
+
+function integerCheckθ(n::node)
+    integer = true
     θ = value.(master(n).obj_dict[:θ])
 
     for val in θ
@@ -75,29 +104,32 @@ function createBranch(n::node)
     θ = value.(master(n).obj_dict[:θ])
 
     seeds = separate(n.bounds,R,θ)
-    println("branch on $seeds: $(s(seeds,R,θ))")
+    if !isempty(Q(seeds,R))
+        val = s(seeds,R,θ)
+        println("branch on $seeds: $val")
 
-    for br in [:≲,:≳]
-        push!(branches,
-            node(
-                n.self, #parent
-                uuid1(), #self
+        for br in [:≲,:≳]
+            push!(branches,
+                node(
+                    n.self, #parent
+                    uuid1(), #self
 
-                vcat(n.bounds, #bounds
-                    bound(
-                        seeds,br,
-                        if br == :≲
-                            floor(s(seeds,R,θ))
-                        else
-                            ceil(s(seeds,R,θ))
-                        end
-                    )
-                ),
-                deepcopy(n.columns), #columns
-                initStab(), #stabilizer
-                ["UNVISITED"]
+                    vcat(n.bounds, #bounds
+                        bound(
+                            seeds,br,
+                            if br == :≲
+                                floor(s(seeds,R,θ))
+                            else
+                                ceil(s(seeds,R,θ))
+                            end
+                        )
+                    ),
+                    deepcopy(n.columns), #columns
+                    initStab(), #stabilizer
+                    ["UNVISITED"]
+                )
             )
-        )
+        end
     end
 
     return branches
@@ -154,7 +186,6 @@ function leaf(n::node,upperBound::Float64,maxiter::Float64)
 
     return (stack=stack,visited=visited,upperBound=upperBound)
 end
-
 
 function traverse(max::Float64)
     #VALUE STORE
