@@ -239,7 +239,7 @@ function getDuals(mp::Model)
     ρ = dual.(mp.obj_dict[:ρ])
     σ = dual.(mp.obj_dict[:σ])
 
-    return dval(λ,δ,ϵ,ρ,σ)
+    return dv(λ,δ,ϵ,ρ,σ)
 end
 
 function getCols(sp)

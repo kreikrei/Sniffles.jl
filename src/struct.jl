@@ -47,7 +47,7 @@ struct col
     x::JuMP.Containers.DenseAxisArray
 end
 
-struct dval
+struct dv
     #three master constraints
     λ::JuMP.Containers.DenseAxisArray
     δ::JuMP.Containers.SparseAxisArray
