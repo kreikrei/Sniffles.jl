@@ -45,11 +45,21 @@ function column(n::node)
 
         #SUBPROBLEM MODIFICATIONS
         F = Dict(1:length(n.bounds) .=> n.bounds)
-        uB = filter(f -> last(f).type == :≲, F)
-        lB = filter(f -> last(f).type == :≳, F)
+        uB = filter(f -> last(f).type == ">=", F)
+        lB = filter(f -> last(f).type == "=<", F)
 
         @variable(sp, g[keys(uB)], Bin)
         @variable(sp, h[keys(lB)], Bin)
+
+        q = col(u,v,l,y,z,x)
+
+        for j in keys(uB)
+
+        end
+
+        for j in keys(lB)
+
+        end
 
         optimize!(sp)
         G[(k,t)] = sp
