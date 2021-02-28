@@ -364,3 +364,44 @@ function colGen(n::node;maxCG::Float64,track::Bool)
 
     return n
 end
+
+function origin(n::node)
+    z = JuMP.Containers.DenseAxisArray{Float64}(undef,V(),K(),T())
+    y = JuMP.Containers.DenseAxisArray{Float64}(undef,V(),K(),T())
+    u = JuMP.Containers.DenseAxisArray{Float64}(undef,V(),K(),T())
+    v = JuMP.Containers.DenseAxisArray{Float64}(undef,V(),K(),T())
+    x = JuMP.Containers.DenseAxisArray{Float64}(
+        undef,collect(V()),collect(V()),collect(K()),T()
+    )
+    l = JuMP.Containers.DenseAxisArray{Float64}(
+        undef,collect(V()),collect(V()),collect(K()),T()
+    )
+
+    z .= 0
+    y .= 0
+    u .= 0
+    v .= 0
+    l .= 0
+    x .= 0
+
+    R = Dict(1:length(n.columns) .=> n.columns)
+    mp = master(n)
+    θ = mp.obj_dict[:θ]
+
+    for k in K(), i in K(k).cover,t in T()
+        z[i,k,t] = value(sum(R[r][(k,t)].z[i] * θ[r,k,t] for r in keys(R)))
+        y[i,k,t] = value(sum(R[r][(k,t)].y[i] * θ[r,k,t] for r in keys(R)))
+        u[i,k,t] = value(sum(R[r][(k,t)].u[i] * θ[r,k,t] for r in keys(R)))
+        v[i,k,t] = value(sum(R[r][(k,t)].v[i] * θ[r,k,t] for r in keys(R)))
+    end
+
+    for k in K(), i in K(k).cover,t in T(), j in K(k).cover
+        x[i,j,k,t] = value(sum(R[r][(k,t)].x[i,j] * θ[r,k,t] for r in keys(R)))
+        l[i,j,k,t] = value(sum(R[r][(k,t)].l[i,j] * θ[r,k,t] for r in keys(R)))
+    end
+
+    return col(
+        u,v,l,
+        y,z,x
+    )
+end
