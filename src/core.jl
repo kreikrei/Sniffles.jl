@@ -4,7 +4,10 @@
 
 passes(i) = [k for k in K() if (i in K(k).cover)]
 
-function column(n::node)
+const column_structure = Ref{Any}(nothing)
+callSub() = column_structure[]
+
+function column!(n::node)
     R = Dict{Tuple,Model}()
 
     for k in K(), t in T()
@@ -73,7 +76,7 @@ function column(n::node)
         R[(k,t)] = sp
     end
 
-    return R
+    return column_structure = R
 end
 
 function master(n::node)
