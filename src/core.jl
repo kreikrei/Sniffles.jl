@@ -7,6 +7,28 @@ passes(i) = [k for k in K() if (i in K(k).cover)]
 const column_structure = Ref{Any}(nothing)
 callSub() = column_structure[]
 
+function Q(key,R)
+    q = Vector{NamedTuple}()
+
+    for seq in key.sequence
+        for r in keys(R)
+            if seq.sense == 1
+                if getproperty(R[r][key.k,key.t],seq.q)[seq.i] >= seq.v
+                    push!(q,(r=r,k=k,t=t))
+                end
+            else #if seq.sense == -1
+                if getproperty(R[r][key.k,key.t],seq.q)[seq.i] < seq.v
+                    push!(q,(r=r,k=k,t=t))
+                end
+            end
+        end
+    end
+
+    return unique!(q)
+end
+
+s(key,R,θ) = sum(θ[q.r,q.k,q.t] for q in Q(key,R))
+
 function column!(n::node)
     R = Dict{Tuple,Model}()
 
