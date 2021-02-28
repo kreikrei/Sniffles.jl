@@ -2,9 +2,7 @@
 #    CORE FUNCTIONS AND MECHANISMS
 # =========================================================================
 
-function passes(i::Int64)
-    return
-end
+passes(i) = [k for k in K() if (i in K(k).cover)]
 
 function column(n::node)
     R = Dict{Tuple,Model}()
