@@ -21,6 +21,7 @@ function Q(key,R)
             return q
         end
     end
+    println("tes")
 end
 
 function f(key,R,θ)
