@@ -2,18 +2,8 @@
 #    CORE FUNCTIONS AND MECHANISMS
 # =========================================================================
 
-function master(n::node)
-
-    return mp
-end
-
-function sub(n::node,duals::dv)
-
-    return sp
-end
-
 function column(n::node)
-    G = Dict{Tuple,Model}()
+    R = Dict{Tuple,Model}()
 
     for k in K(), t in T()
         sp = Model(get_optimizer())
@@ -45,8 +35,8 @@ function column(n::node)
 
         #SUBPROBLEM MODIFICATIONS
         F = Dict(1:length(n.bounds) .=> n.bounds)
-        uB = filter(f -> last(f).type == ">=", F)
-        lB = filter(f -> last(f).type == "=<", F)
+        uB = filter(f -> last(f).type == ">=" && F[j].S.k == k && F[j].S.t == t, F)
+        lB = filter(f -> last(f).type == "=<" && F[j].S.k == k && F[j].S.t == t, F)
 
         @variable(sp, g[keys(uB)], Bin)
         @variable(sp, h[keys(lB)], Bin)
@@ -54,16 +44,42 @@ function column(n::node)
         q = col(u,v,l,y,z,x)
 
         for j in keys(uB)
-
+            η = @variable(sp, [F[j].S.sequence], Bin)
+            @constraint(sp, g[j] >= 1 - sum((1 - η[e]) for e in F[j].S.sequence))
+            for e in F[j].S.sequence
+                if e.sense == 1
+                    @constraint(sp, (2 - e.v) * η[e] >= getproperty(q,e.q)[e.i] - e.v + 1)
+                else #if e.sense == -1
+                    @constraint(sp, e.v * η[e] >= e.v - getproperty(q,e.q)[e.i])
+                end
+            end
         end
 
         for j in keys(lB)
-
+            η = @variable(sp, [F[j].S.sequence], Bin)
+            @constraint(sp, [e = F[j].S.sequence], h[j] <= η[e])
+            for e in F[j].S.sequence
+                if e.sense == 1
+                    @constraint(sp, e.v * η[e] <= getproperty(q,e.q)[e.i])
+                else #if e.sense == -1
+                    @constraint(sp, (2 - e.v) * η[e] <= 1 - getproperty(q,e.q)[e.i])
+                end
+            end
         end
 
         optimize!(sp)
-        G[(k,t)] = sp
+        R[(k,t)] = sp
     end
 
-    return G
+    return R
+end
+
+function master(n::node)
+
+    return mp
+end
+
+function sub(n::node,duals::dv)
+    
+    return sp
 end
