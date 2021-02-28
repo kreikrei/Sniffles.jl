@@ -8,12 +8,13 @@ const period_data = Ref{Any}(nothing)
 const demand_data = Ref{Any}(nothing)
 const distance_data = Ref{Any}(nothing)
 
-K() = sort!(collect(keys(vehicle_data)))
+K() = sort!(collect(keys(vehicle_data[])))
 K(k) = vehicle_data[][k]
-V() = sort!(collect(keys(vertex_data)))
-V(i) = vehicle_data[][i]
+V() = sort!(collect(keys(vertex_data[])))
+V(i) = vertex_data[][i]
 T() = period_data[]
 d() = demand_data[]
+d(i,t) = demand_data[][i,t]
 dist() = distance_data[]
 dist(i,j) = distance_data[][i,j]
 
@@ -76,11 +77,11 @@ function extract!(path::String;distformula::String) #extract from excel
         T #dims 2
     )
 
-    vehicle_data = K
-    vertex_data = V
-    period_data = T
-    demand_data = d
-    distance_data = dist
+    vehicle_data[] = K
+    vertex_data[] = V
+    period_data[] = T
+    demand_data[] = d
+    distance_data[] = dist
 
     return V,dist,K,T,d
 end

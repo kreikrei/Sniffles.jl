@@ -98,7 +98,7 @@ function column!(n::node)
         R[(k,t)] = sp
     end
 
-    return column_structure = R
+    return column_structure[] = R
 end
 
 function master(n::node)
@@ -215,7 +215,10 @@ function sub(n::node,duals::dv)
             ) +
             sum(K(k).fd * sp.obj_dict[:u][i] for i in K(k).cover) +
             sum(K(k).fp * sp.obj_dict[:z][i] for i in K(k).cover) -
-            sum(sp.obj_dict[:u][i] - sp.obj_dict[:v][i] * duals.λ[i,t] for i in K(k).cover)-
+            sum(
+                (sp.obj_dict[:u][i] - sp.obj_dict[:v][i]) * duals.λ[i,t]
+                for i in K(k).cover
+            ) -
             sum(sp.obj_dict[:z][i] * duals.δ[k,i,t] for i in K(k).cover) -
             duals.ϵ[k,t] -
             sum(sp.obj_dict[:g][j] * duals.ρ[j] for j in keys(uB)) -
