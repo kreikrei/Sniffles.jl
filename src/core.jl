@@ -196,6 +196,12 @@ end
 function sub(n::node,duals::dv)
     for k in K(), t in T()
         sp = callSub()[(k,t)]
+        if solver_name(sp) == "Gurobi"
+            set_optimizer_attribute(sp,"MIPFocus",2)
+            set_optimizer_attribute(sp,"Threads",1)
+            set_optimizer_attribute(sp,"NodefileStart",0.5)
+            set_optimizer_attribute(sp, "NumericFocus",2)
+        end
 
         # ================================
         #    BOUND IDENTIFICATION
