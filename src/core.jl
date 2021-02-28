@@ -2,6 +2,10 @@
 #    CORE FUNCTIONS AND MECHANISMS
 # =========================================================================
 
+function passes(i::Int64)
+    return
+end
+
 function column(n::node)
     R = Dict{Tuple,Model}()
 
@@ -167,6 +171,57 @@ function master(n::node)
 end
 
 function sub(n::node,duals::dv)
+    for k in K(), t in T()
+        sp = callSub()[(k,t)]
 
-    return sp
+        # ================================
+        #    BOUND IDENTIFICATION
+        # ================================
+        F = Dict(1:length(n.bounds) .=> n.bounds)
+        uB = filter(f -> last(f).type == "<=" && last(f).S.k == k && last(f).S.t == t,F)
+        lB = filter(f -> last(f).type == ">=" && last(f).S.k == k && last(f).S.t == t,F)
+
+        #ADD OBJECTIVE
+        @objective(sp, Min,
+            sum(
+                dist(i,j) * (
+                    K(k).vx * sp.obj_dict[:x][i,j] +
+                    K(k).vl * sp.obj_dict[:l][i,j]
+                )
+                for i in K(k).cover, j in K(k).cover
+            ) +
+            sum(
+                K(k).fd * sp.obj_dict[:u][i]
+                for i in K(k).cover
+            ) +
+            sum(
+                K(k).fp * sp.obj_dict[:z][i]
+                for i in K(k).cover
+            ) -
+            sum(
+                (sp.obj_dict[:u][i] - sp.obj_dict[:v][i]) * duals.λ[i,t]
+                for i in K(k).cover
+            ) -
+            sum(
+                sp.obj_dict[:z][i] * duals.δ[k,i,t]
+                for i in K(k).cover
+            ) -
+            duals.ϵ[k,t] -
+            sum(
+                sp.obj_dict[:g][j] * duals.ρ[j]
+                for j in keys(uB)
+            ) -
+            sum(
+                sp.obj_dict[:h][j] * duals.σ[j]
+                for j in keys(lB)
+            )
+        )
+
+        optimize!(sp)
+        if !silent()
+            println("($k,$t): $(objective_value(sp))")
+        end
+    end
+
+    return callSub()
 end
