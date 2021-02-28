@@ -208,3 +208,137 @@ function sub(n::node,duals::dv)
 
     return callSub()
 end
+
+function getDuals(mp::Model)
+    λ = dual.(mp.obj_dict[:λ])
+    δ = dual.(mp.obj_dict[:δ])
+    ϵ = dual.(mp.obj_dict[:ϵ])
+
+    ρ = dual.(mp.obj_dict[:ρ])
+    σ = dual.(mp.obj_dict[:σ])
+
+    return dval(λ,δ,ϵ,ρ,σ)
+end
+
+function getCols(sp)
+    if isa(sp,Model)
+        u = value.(sp.obj_dict[:u])
+        v = value.(sp.obj_dict[:v])
+        l = value.(sp.obj_dict[:l])
+        y = value.(sp.obj_dict[:y])
+        z = value.(sp.obj_dict[:z])
+        x = value.(sp.obj_dict[:x])
+
+        return col(u,v,l,y,z,x)
+    elseif isa(sp,Dict)
+        new = Dict{Tuple,col}()
+        for r in keys(sp)
+            new[r] = getCols(sp[r])
+        end
+
+        return new
+    end
+end
+
+function colvals()
+    collection = 0
+    for k in K(), t in T()
+        collection += objective_value(callSub()[(k,t)])
+    end
+
+    return sum(collection)
+end
+
+function updateStab!(stab::stabilizer,param::Float64)
+    for i in first(stab.slLim.axes),t in last(stab.slLim.axes)
+        stab.slLim[i,t] = param * stab.slLim[i,t]
+        if stab.slLim[i,t] < 1
+            stab.slLim[i,t] = 0
+        end
+    end
+
+    for i in first(stab.suLim.axes),t in last(stab.suLim.axes)
+        stab.suLim[i,t] = param * stab.suLim[i,t]
+        if stab.suLim[i,t] < 1
+            stab.suLim[i,t] = 0
+        end
+    end
+
+    return stab
+end
+
+checkStab(mp::Model) = sum(value.(mp.obj_dict[:slack])) + sum(value.(mp.obj_dict[:surp]))
+
+function colGen(n::node;maxCG::Float64,track::Bool)
+    terminate = false
+    iter = 0
+    column!(n)
+
+    while !terminate
+        if iter < maxCG
+            mp = master(n)
+
+            if has_values(mp) && has_duals(mp)
+                if track #print master problem obj
+                    println("obj: $(objective_value(mp))")
+                end
+
+                duals = getDuals(mp)
+                sp = sub(n,duals)
+
+                if track #print subproblem price
+                    println("price: $(colvals())")
+                end
+
+                if isapprox(colvals(),0,atol = 1e-8) || colvals() > 0
+                    if isapprox(checkStab(mp),0,atol = 1e-8)
+                        terminate = true #action
+                        push!(n.status,"EVALUATED") #report
+                        if track
+                            println("EVALUATED")
+                        end
+                    else
+                        updateStab!(n.stab,0.5) #action
+                        push!(n.status,"STABILIZED") #report
+                        if track
+                            println("STABILIZED")
+                        end
+                    end
+                else
+                    push!(n.columns,getCols(sp)) #action
+                    push!(n.status,"ADD_COLUMN") #report
+                    if track
+                        println("ADD_COLUMN")
+                    end
+                end
+
+                iter += 1 #iteration update
+            else
+                terminate = true #action
+                push!(n.status,"NO_SOLUTION")
+                if track
+                    println("NO_SOLUTION")
+                end
+            end
+        else
+            terminate = true #action
+            push!(n.status,"EVALUATED") #report
+            if track
+                println("EVALUATED")
+            end
+        end
+    end
+
+    if n.status[end] == "NO_SOLUTION"
+        println("NODE $(n.self) FAILED.")
+    else
+        if integerCheck(n)
+            push!(n.status,"INTEGER")
+            println("NODE $(n.self) INTEGER")
+        else
+            println("NODE $(n.self) FINISHED.")
+        end
+    end
+
+    return n
+end
