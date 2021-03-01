@@ -13,13 +13,13 @@ function Q(key,R)
             q = Vector{Vector{NamedTuple}}()
             for seq in key
                 res = Vector{NamedTuple}()
-                for r in keys(R), k in intersect(passes(seq.i),passes(seq.j)), t in T()
+                for r in keys(R), k in passes(seq.i), t in T()
                     if seq.sense == 1
-                        if getproperty(R[r][k,t],seq.q)[seq.i,seq.j] >= seq.v
+                        if getproperty(R[r][k,t],seq.q)[seq.i] >= seq.v
                             push!(res,(r=r,k=k,t=t))
                         end
                     else #if seq.sense == -1
-                        if getproperty(R[r][k,t],seq.q)[seq.i,seq.j] < seq.v
+                        if getproperty(R[r][k,t],seq.q)[seq.i] < seq.v
                             push!(res,(r=r,k=k,t=t))
                         end
                     end
@@ -74,25 +74,21 @@ function column!(n::node)
         @variable(sp, u[K(k).cover] >= 0, Int)
         @variable(sp, v[K(k).cover] >= 0, Int)
         @variable(sp, l[K(k).cover, K(k).cover] >= 0, Int)
-        @variable(sp, y[K(k).cover], Bin)
-        @variable(sp, z[K(k).cover], Bin)
+        @variable(sp, o[i = K(k).cover] <= K(k).BP[i], Bin)
         @variable(sp, x[K(k).cover, K(k).cover], Bin)
 
         #BASIC CONSTRAINTS
-        @constraint(sp, sum(u[i] for i in K(k).cover) == sum(v[i] for i in K(k).cover))
-
-        @constraint(sp, [i = K(k).cover], sum(x[j,i] for j in K(k).cover) == y[i] + z[i])
-        @constraint(sp, [i = K(k).cover], sum(x[i,j] for j in K(k).cover) == y[i] + z[i])
+        @constraint(sp, sum(u[i] for i in K(k).cover) - sum(v[i] for i in K(k).cover) == 0)
+        @constraint(sp, [i = K(k).cover],
+        sum(l[j,i] for j in K(k).cover) - sum(l[i,j] for j in K(k).cover) == u[i] - v[i])
 
         @constraint(sp, [i = K(k).cover],
-            sum(l[j,i] for j in K(k).cover) - sum(l[i,j] for j in K(k).cover) == u[i] - v[i]
-        ) #vehicle load balance
+        sum(x[j,i] for j in K(k).cover) - sum(x[i,j] for j in K(k).cover) == 0)
 
-        @constraint(sp, [i = K(k).cover], u[i] <= K(k).Q * y[i]) #UY
-        @constraint(sp, [i = K(k).cover], v[i] <= K(k).Q * z[i]) #VZ
+        @constraint(sp, [i = K(k).cover], v[i] <= K(k).Q * o[i]) #VZ
         @constraint(sp, [i = K(k).cover, j = K(k).cover], l[i,j] <= K(k).Q * x[i,j]) #XL
 
-        @constraint(sp, sum(z[i] for i in K(k).cover) <= 1) #one start
+        @constraint(sp, sum(o[i] for i in K(k).cover) <= 1) #one start
 
         #SUBPROBLEM MODIFICATIONS
         F = Dict(1:length(n.bounds) .=> n.bounds)
@@ -102,16 +98,17 @@ function column!(n::node)
         @variable(sp, g[keys(uB)], Bin)
         @variable(sp, h[keys(lB)], Bin)
 
-        q = col(u,v,l,y,z,x)
+        q = col(u,v,l,o,x)
 
         for j in keys(uB)
             η = @variable(sp, [F[j].S.sequence], Bin)
             @constraint(sp, g[j] >= 1 - sum((1 - η[e]) for e in F[j].S.sequence))
             for e in F[j].S.sequence
                 if e.sense == 1
-                    @constraint(sp, (2-e.v) * η[e] >= getproperty(q,e.q)[e.i,e.j] - e.v + 1)
+                    @constraint(sp,
+                    (K(k).Q - e.v + 1) * η[e] >= getproperty(q,e.q)[e.i] - e.v + 1)
                 else #if e.sense == -1
-                    @constraint(sp, e.v * η[e] >= e.v - getproperty(q,e.q)[e.i,e.j])
+                    @constraint(sp, e.v * η[e] >= e.v - getproperty(q,e.q)[e.i])
                 end
             end
         end
@@ -121,9 +118,10 @@ function column!(n::node)
             @constraint(sp, [e = F[j].S.sequence], h[j] <= η[e])
             for e in F[j].S.sequence
                 if e.sense == 1
-                    @constraint(sp, e.v * η[e] <= getproperty(q,e.q)[e.i,e.j])
+                    @constraint(sp, e.v * η[e] <= getproperty(q,e.q)[e.i])
                 else #if e.sense == -1
-                    @constraint(sp, (2 - e.v) * η[e] <= 1 - getproperty(q,e.q)[e.i,e.j])
+                    @constraint(sp,
+                    (K(k).Q - e.v + 1) * η[e] <= 1 - getproperty(q,e.q)[e.i])
                 end
             end
         end
@@ -173,7 +171,7 @@ function master(n::node)
                     for i in K(k).cover
                 ) +
                 sum(
-                    K(k).fp * R[r][(k,t)].z[i]
+                    K(k).fp * R[r][(k,t)].o[i]
                     for i in K(k).cover
                 )
             )
@@ -202,7 +200,7 @@ function master(n::node)
     )
 
     @constraint(mp, δ[k = K(), i = K(k).cover, t = T()],
-        sum(R[r][(k,t)].z[i] * θ[r,k,t] for r in keys(R)) <= K(k).BP[i]
+        sum(R[r][(k,t)].o[i] * θ[r,k,t] for r in keys(R)) <= K(k).BP[i]
     )
 
     @constraint(mp, ϵ[k = K(), t = T()],
@@ -253,12 +251,12 @@ function sub(n::node,duals::dv)
                 for i in K(k).cover, j in K(k).cover
             ) +
             sum(K(k).fd * sp.obj_dict[:u][i] for i in K(k).cover) +
-            sum(K(k).fp * sp.obj_dict[:z][i] for i in K(k).cover) -
+            sum(K(k).fp * sp.obj_dict[:o][i] for i in K(k).cover) -
             sum(
                 (sp.obj_dict[:u][i] - sp.obj_dict[:v][i]) * duals.λ[i,t]
                 for i in K(k).cover
             ) -
-            sum(sp.obj_dict[:z][i] * duals.δ[k,i,t] for i in K(k).cover) -
+            sum(sp.obj_dict[:o][i] * duals.δ[k,i,t] for i in K(k).cover) -
             duals.ϵ[k,t] -
             sum(sp.obj_dict[:g][j] * duals.ρ[j] for j in keys(uB)) -
             sum(sp.obj_dict[:h][j] * duals.σ[j] for j in keys(lB))
@@ -289,11 +287,10 @@ function getCols(sp)
         u = value.(sp.obj_dict[:u])
         v = value.(sp.obj_dict[:v])
         l = value.(sp.obj_dict[:l])
-        y = value.(sp.obj_dict[:y])
-        z = value.(sp.obj_dict[:z])
+        o = value.(sp.obj_dict[:o])
         x = value.(sp.obj_dict[:x])
 
-        return col(u,v,l,y,z,x)
+        return col(u,v,l,o,x)
     elseif isa(sp,Dict)
         new = Dict{Tuple,col}()
         for r in keys(sp)
@@ -396,15 +393,18 @@ function colGen(n::node;maxCG::Float64,track::Bool)
     if n.status[end] == "NO_SOLUTION"
         println("NODE $(n.self) FAILED.")
     else
-        println("NODE $(n.self) FINISHED.")
+        if integerCheck(n)
+            push!(n.status,"INTEGER")
+        else
+            println("NODE $(n.self) FINISHED.")
+        end
     end
 
     return n
 end
 
 function origin(n::node)
-    z = JuMP.Containers.DenseAxisArray{Float64}(undef,V(),K(),T())
-    y = JuMP.Containers.DenseAxisArray{Float64}(undef,V(),K(),T())
+    o = JuMP.Containers.DenseAxisArray{Float64}(undef,V(),K(),T())
     u = JuMP.Containers.DenseAxisArray{Float64}(undef,V(),K(),T())
     v = JuMP.Containers.DenseAxisArray{Float64}(undef,V(),K(),T())
     x = JuMP.Containers.DenseAxisArray{Float64}(
@@ -414,8 +414,7 @@ function origin(n::node)
         undef,collect(V()),collect(V()),collect(K()),T()
     )
 
-    z .= 0
-    y .= 0
+    o .= 0
     u .= 0
     v .= 0
     l .= 0
@@ -426,8 +425,7 @@ function origin(n::node)
     θ = mp.obj_dict[:θ]
 
     for k in K(), i in K(k).cover,t in T()
-        z[i,k,t] = value(sum(R[r][(k,t)].z[i] * θ[r,k,t] for r in keys(R)))
-        y[i,k,t] = value(sum(R[r][(k,t)].y[i] * θ[r,k,t] for r in keys(R)))
+        o[i,k,t] = value(sum(R[r][(k,t)].o[i] * θ[r,k,t] for r in keys(R)))
         u[i,k,t] = value(sum(R[r][(k,t)].u[i] * θ[r,k,t] for r in keys(R)))
         v[i,k,t] = value(sum(R[r][(k,t)].v[i] * θ[r,k,t] for r in keys(R)))
     end
@@ -438,7 +436,6 @@ function origin(n::node)
     end
 
     return col(
-        u,v,l,
-        y,z,x
+        u,v,l,o,x
     )
 end

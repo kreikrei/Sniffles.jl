@@ -42,8 +42,7 @@ struct col
     l::JuMP.Containers.DenseAxisArray
 
     #decision
-    y::JuMP.Containers.DenseAxisArray
-    z::JuMP.Containers.DenseAxisArray
+    o::JuMP.Containers.DenseAxisArray
     x::JuMP.Containers.DenseAxisArray
 end
 
@@ -61,12 +60,9 @@ end
 struct β
     q::Symbol
     i::Int64
-    j::Int64
     sense::Int64
     v::Int64
 end
-
-β(q,edge,sense,v) = β(q,first(edge),last(edge),sense,v)
 
 struct S
     k::Int64

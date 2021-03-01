@@ -6,6 +6,7 @@ using DataFrames
 using Distances
 using UUIDs
 using Combinatorics
+using Statistics
 
 include("struct.jl")
 include("settings.jl")
@@ -25,6 +26,7 @@ export stabilizer
 export node
 
 #base.jl
+export passes
 export extract!
 export initStab
 export root
@@ -59,5 +61,7 @@ export getDuals
 export getCols
 export colGen
 export origin
+
+export leaf
 
 end
