@@ -17,6 +17,7 @@ d() = demand_data[]
 d(i,t) = demand_data[][i,t]
 dist() = distance_data[]
 dist(i,j) = distance_data[][i,j]
+edges(k) = collect(permutations(K(k).cover,2))
 
 function extract!(path::String;distformula::String) #extract from excel
     xf = XLSX.readxlsx(path) #READ WORKSHEET

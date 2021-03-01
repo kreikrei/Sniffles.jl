@@ -33,6 +33,7 @@ export V
 export T
 export d
 export dist
+export edges
 
 #settings.jl
 export set_optimizer!
@@ -48,7 +49,9 @@ export silent
 #core.jl
 export callSub
 export Q
-export s
+export fract
+export sQ
+export sF
 export column!
 export master
 export sub

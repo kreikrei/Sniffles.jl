@@ -61,9 +61,12 @@ end
 struct β
     q::Symbol
     i::Int64
-    sense::String
+    j::Int64
+    sense::Int64
     v::Int64
 end
+
+β(q,edge,sense,v) = β(q,first(edge),last(edge),sense,v)
 
 struct S
     k::Int64
@@ -73,7 +76,7 @@ end
 
 struct bound
     S::S #component bound sequence
-    type::Symbol #≳ or ≲
+    sense::String #≳ or ≲
     κ::Int64 #value of aggregation
 end
 

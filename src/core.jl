@@ -4,37 +4,71 @@
 
 passes(i) = [k for k in K() if (i in K(k).cover)]
 
-const column_structure = Ref{Any}(nothing)
-callSub() = column_structure[]
-
 function Q(key,R)
-    q = Vector{NamedTuple}()
-
-    for seq in key.sequence
-        for r in keys(R)
-            if seq.sense == 1
-                if getproperty(R[r][key.k,key.t],seq.q)[seq.i] >= seq.v
-                    push!(q,(r=r,k=k,t=t))
+    if isa(key,S)
+        res = Q(key.sequence,R)
+        return filter(p -> p.k == key.k && p.t == key.t,res)
+    elseif isa(key,Vector{β})
+        if !isempty(key)
+            q = Vector{Vector{NamedTuple}}()
+            for seq in key
+                res = Vector{NamedTuple}()
+                for r in keys(R), k in intersect(passes(seq.i),passes(seq.j)), t in T()
+                    if seq.sense == 1
+                        if getproperty(R[r][k,t],seq.q)[seq.i,seq.j] >= seq.v
+                            push!(res,(r=r,k=k,t=t))
+                        end
+                    else #if seq.sense == -1
+                        if getproperty(R[r][k,t],seq.q)[seq.i,seq.j] < seq.v
+                            push!(res,(r=r,k=k,t=t))
+                        end
+                    end
                 end
-            else #if seq.sense == -1
-                if getproperty(R[r][key.k,key.t],seq.q)[seq.i] < seq.v
-                    push!(q,(r=r,k=k,t=t))
-                end
+                push!(q,res)
             end
+            return reduce(intersect,q)
+        else
+            q = Vector{NamedTuple}()
+            for r in keys(R), k in K(), t in T()
+                push!(q,(r=r,k=k,t=t))
+            end
+            return q
+        end
+    end
+end
+
+sQ(key,R,θ) = sum(θ[q.r,q.k,q.t] for q in Q(key,R))
+
+function fract(key,R,θ)
+    F = Vector{NamedTuple}()
+    for r in θ.axes[1], k in θ.axes[2], t in θ.axes[3]
+        if θ[r,k,t] - floor(θ[r,k,t]) > 0
+            push!(F,(r=r,k=k,t=t))
         end
     end
 
-    return unique!(q)
+    res = Q(key,R)
+
+    return intersect(F,res)
 end
 
-s(key,R,θ) = sum(θ[q.r,q.k,q.t] for q in Q(key,R))
+sF(key,R,θ) = sum(θ[f.r,f.k,f.t] for f in fract(key,R,θ))
+
+const column_structure = Ref{Any}(nothing)
+callSub() = column_structure[]
 
 function column!(n::node)
     R = Dict{Tuple,Model}()
 
-    for k in K(), t in T()
+    @inbounds for k in K(), t in T()
         sp = Model(get_optimizer())
         set_silent(sp)
+
+        if solver_name(sp) == "Gurobi"
+            set_optimizer_attribute(sp,"MIPFocus",2)
+            set_optimizer_attribute(sp,"NodefileStart",0.5)
+            set_optimizer_attribute(sp, "NumericFocus",3)
+        end
 
         #VARIABLE DEFINITION
         @variable(sp, u[K(k).cover] >= 0, Int)
@@ -62,8 +96,8 @@ function column!(n::node)
 
         #SUBPROBLEM MODIFICATIONS
         F = Dict(1:length(n.bounds) .=> n.bounds)
-        uB = filter(f -> last(f).type == "<=" && F[j].S.k == k && F[j].S.t == t, F)
-        lB = filter(f -> last(f).type == ">=" && F[j].S.k == k && F[j].S.t == t, F)
+        uB = filter(f -> last(f).sense == "<=" && last(f).S.k == k && last(f).S.t == t, F)
+        lB = filter(f -> last(f).sense == ">=" && last(f).S.k == k && last(f).S.t == t, F)
 
         @variable(sp, g[keys(uB)], Bin)
         @variable(sp, h[keys(lB)], Bin)
@@ -75,9 +109,9 @@ function column!(n::node)
             @constraint(sp, g[j] >= 1 - sum((1 - η[e]) for e in F[j].S.sequence))
             for e in F[j].S.sequence
                 if e.sense == 1
-                    @constraint(sp, (2 - e.v) * η[e] >= getproperty(q,e.q)[e.i] - e.v + 1)
+                    @constraint(sp, (2-e.v) * η[e] >= getproperty(q,e.q)[e.i,e.j] - e.v + 1)
                 else #if e.sense == -1
-                    @constraint(sp, e.v * η[e] >= e.v - getproperty(q,e.q)[e.i])
+                    @constraint(sp, e.v * η[e] >= e.v - getproperty(q,e.q)[e.i,e.j])
                 end
             end
         end
@@ -87,9 +121,9 @@ function column!(n::node)
             @constraint(sp, [e = F[j].S.sequence], h[j] <= η[e])
             for e in F[j].S.sequence
                 if e.sense == 1
-                    @constraint(sp, e.v * η[e] <= getproperty(q,e.q)[e.i])
+                    @constraint(sp, e.v * η[e] <= getproperty(q,e.q)[e.i,e.j])
                 else #if e.sense == -1
-                    @constraint(sp, (2 - e.v) * η[e] <= 1 - getproperty(q,e.q)[e.i])
+                    @constraint(sp, (2 - e.v) * η[e] <= 1 - getproperty(q,e.q)[e.i,e.j])
                 end
             end
         end
@@ -107,6 +141,11 @@ function master(n::node)
         set_silent(mp)
     else
         unset_silent(mp)
+    end
+
+    if solver_name(mp) == "Gurobi"
+        set_optimizer_attribute(mp,"NodefileStart",0.5)
+        set_optimizer_attribute(mp, "NumericFocus",3)
     end
 
     R = Dict(1:length(n.columns) .=> n.columns)
@@ -194,21 +233,15 @@ function master(n::node)
 end
 
 function sub(n::node,duals::dv)
-    for k in K(), t in T()
+    @inbounds for k in K(), t in T()
         sp = callSub()[(k,t)]
-        if solver_name(sp) == "Gurobi"
-            set_optimizer_attribute(sp,"MIPFocus",2)
-            set_optimizer_attribute(sp,"Threads",1)
-            set_optimizer_attribute(sp,"NodefileStart",0.5)
-            set_optimizer_attribute(sp, "NumericFocus",2)
-        end
 
         # ================================
         #    BOUND IDENTIFICATION
         # ================================
         F = Dict(1:length(n.bounds) .=> n.bounds)
-        uB = filter(f -> last(f).type == "<=" && last(f).S.k == k && last(f).S.t == t,F)
-        lB = filter(f -> last(f).type == ">=" && last(f).S.k == k && last(f).S.t == t,F)
+        uB = filter(f -> last(f).sense == "<=" && last(f).S.k == k && last(f).S.t == t,F)
+        lB = filter(f -> last(f).sense == ">=" && last(f).S.k == k && last(f).S.t == t,F)
 
         #ADD OBJECTIVE
         @objective(sp, Min,
@@ -363,12 +396,7 @@ function colGen(n::node;maxCG::Float64,track::Bool)
     if n.status[end] == "NO_SOLUTION"
         println("NODE $(n.self) FAILED.")
     else
-        if integerCheck(n)
-            push!(n.status,"INTEGER")
-            println("NODE $(n.self) INTEGER")
-        else
-            println("NODE $(n.self) FINISHED.")
-        end
+        println("NODE $(n.self) FINISHED.")
     end
 
     return n
