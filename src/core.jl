@@ -1,42 +1,136 @@
 # =========================================================================
 #    CORE FUNCTIONS AND MECHANISMS
 # =========================================================================
+
+passes(i) = [k for k in K() if (i in K(k).cover)]
+
 function Q(key,R)
-    if isa(key,β)
-        q = Vector{NamedTuple}()
-        for r in keys(R)
-            if getproperty(R[r][(key.k,key.t)],key.q)[key.i,key.j] >= key.v
-                push!(q,(r=r,k=key.k,t=key.t))
-            end
-        end
-        return q
+    if isa(key,S)
+        res = Q(key.sequence,R)
+        return filter(p -> p.k == key.k && p.t == key.t,res)
     elseif isa(key,Vector{β})
-        q = Vector{Vector{NamedTuple}}()
-        for b in key
-            push!(q,Q(b,R))
-        end
-        if !isempty(q)
+        if !isempty(key)
+            q = Vector{Vector{NamedTuple}}()
+            for seq in key
+                res = Vector{NamedTuple}()
+                for r in keys(R), k in passes(seq.i), t in T()
+                    if seq.sense == 1
+                        if getproperty(R[r][k,t],seq.q)[seq.i] >= seq.v
+                            push!(res,(r=r,k=k,t=t))
+                        end
+                    else #if seq.sense == -1
+                        if getproperty(R[r][k,t],seq.q)[seq.i] < seq.v
+                            push!(res,(r=r,k=k,t=t))
+                        end
+                    end
+                end
+                push!(q,res)
+            end
             return reduce(intersect,q)
         else
+            q = Vector{NamedTuple}()
+            for r in keys(R), k in K(), t in T()
+                push!(q,(r=r,k=k,t=t))
+            end
             return q
         end
     end
 end
 
-function f(key,R,θ)
-    if !isempty(Q(key,R))
-        return sum(θ[q.r,q.k,q.t] - floor(θ[q.r,q.k,q.t]) for q in Q(key,R))
-    else
-        return 0
+sQ(key,R,θ) = sum(θ[q.r,q.k,q.t] for q in Q(key,R))
+
+function fract(key,R,θ)
+    F = Vector{NamedTuple}()
+    for r in θ.axes[1], k in θ.axes[2], t in θ.axes[3]
+        if θ[r,k,t] - floor(θ[r,k,t]) > 0
+            push!(F,(r=r,k=k,t=t))
+        end
     end
+
+    res = Q(key,R)
+
+    return intersect(F,res)
 end
 
-function s(key,R,θ)
-    if !isempty(Q(key,R))
-        return sum(θ[q.r,q.k,q.t] for q in Q(key,R))
-    else
-        return 0
+sF(key,R,θ) = sum(θ[f.r,f.k,f.t] for f in fract(key,R,θ))
+
+const column_structure = Ref{Any}(nothing)
+callSub() = column_structure[]
+
+function column!(n::node)
+    R = Dict{Tuple,Model}()
+
+    @inbounds for k in K(), t in T()
+        sp = Model(get_optimizer())
+        set_silent(sp)
+
+        if solver_name(sp) == "Gurobi"
+            set_optimizer_attribute(sp,"MIPFocus",2)
+            set_optimizer_attribute(sp,"NodefileStart",0.5)
+            set_optimizer_attribute(sp, "NumericFocus",3)
+        end
+
+        #VARIABLE DEFINITION
+        @variable(sp, u[K(k).cover] >= 0, Int)
+        @variable(sp, v[K(k).cover] >= 0, Int)
+        @variable(sp, l[K(k).cover, K(k).cover] >= 0, Int)
+        @variable(sp, o[i = K(k).cover] <= K(k).BP[i], Bin)
+        @variable(sp, x[K(k).cover, K(k).cover], Bin)
+
+        #BASIC CONSTRAINTS
+        @constraint(sp, sum(u[i] for i in K(k).cover) - sum(v[i] for i in K(k).cover) == 0)
+        @constraint(sp, [i = K(k).cover],
+        sum(l[j,i] for j in K(k).cover) - sum(l[i,j] for j in K(k).cover) == u[i] - v[i])
+
+        @constraint(sp, [i = K(k).cover],
+        sum(x[j,i] for j in K(k).cover) - sum(x[i,j] for j in K(k).cover) == 0)
+
+        @constraint(sp, [i = K(k).cover], v[i] <= K(k).Q * o[i]) #VZ
+        @constraint(sp, [i = K(k).cover, j = K(k).cover], l[i,j] <= K(k).Q * x[i,j]) #XL
+
+        @constraint(sp, sum(o[i] for i in K(k).cover) <= 1) #one start
+
+        #SUBPROBLEM MODIFICATIONS
+        F = Dict(1:length(n.bounds) .=> n.bounds)
+        uB = filter(f -> last(f).sense == "<=" && last(f).S.k == k && last(f).S.t == t, F)
+        lB = filter(f -> last(f).sense == ">=" && last(f).S.k == k && last(f).S.t == t, F)
+
+        @variable(sp, g[keys(uB)], Bin)
+        @variable(sp, h[keys(lB)], Bin)
+
+        q = col(u,v,l,o,x)
+
+        for j in keys(uB)
+            η = @variable(sp, [F[j].S.sequence], Bin)
+            @constraint(sp, g[j] >= 1 - sum((1 - η[e]) for e in F[j].S.sequence))
+            for e in F[j].S.sequence
+                if e.sense == 1
+                    @constraint(sp,
+                    (K(k).Q - e.v + 1) * η[e] >= getproperty(q,e.q)[e.i] - e.v + 1)
+                else #if e.sense == -1
+                    @constraint(sp, e.v * η[e] >= e.v - getproperty(q,e.q)[e.i])
+                end
+            end
+        end
+
+        for j in keys(lB)
+            η = @variable(sp, [F[j].S.sequence], Bin)
+            @constraint(sp, [e = F[j].S.sequence], h[j] <= η[e])
+            for e in F[j].S.sequence
+                if e.sense == 1
+                    @constraint(sp, e.v * η[e] <= getproperty(q,e.q)[e.i])
+                else #if e.sense == -1
+                    @constraint(sp,
+                    (K(k).Q - e.v + 1) * η[e] <= 1 - getproperty(q,e.q)[e.i])
+                end
+            end
+        end
+
+        optimize!(sp)
+        R[(k,t)] = sp
     end
+
+    return column_structure[] = R
 end
 
 function master(n::node)
@@ -47,95 +141,134 @@ function master(n::node)
         unset_silent(mp)
     end
 
+    if solver_name(mp) == "Gurobi"
+        set_optimizer_attribute(mp,"NodefileStart",0.5)
+        set_optimizer_attribute(mp, "NumericFocus",3)
+    end
+
     R = Dict(1:length(n.columns) .=> n.columns)
 
     # ================================
     #    MODEL CONSTRUCTION
     # ================================
-    iter_k = Vector{Int64}()
-    iter_k = collect(keys(b().K))
-    iter_i = Vector{Int64}()
-    iter_i = collect(keys(b().V))
-
-    @variable(mp, θ[keys(R), iter_k, b().T] >= 0)
-    @variable(mp, I[iter_i, vcat(first(b().T) - 1, b().T)])
-    @variable(mp, 0 <= slack[i = iter_i, t = b().T] <= n.stab.slLim[i,t])
-    @variable(mp, 0 <= surp[i = iter_i, t = b().T] <= n.stab.suLim[i,t])
+    @variable(mp, θ[keys(R), K(), T()] >= 0)
+    @variable(mp, I[V(), vcat(first(T()) - 1, T())])
+    @variable(mp, 0 <= slack[i = V(), t = T()] <= n.stab.slLim[i,t])
+    @variable(mp, 0 <= surp[i = V(), t = T()] <= n.stab.suLim[i,t])
 
     @objective(mp, Min,
         sum(
             θ[r,k,t] * (
                 sum(
-                    b().dist[i,j] * (
-                        b().K[k].vx * R[r][(k,t)].x[i,j] +
-                        b().K[k].vl * R[r][(k,t)].l[i,j]
+                    dist(i,j) * (
+                        K(k).vx * R[r][(k,t)].x[i,j] +
+                        K(k).vl * R[r][(k,t)].l[i,j]
                     )
-                    for i in b().K[k].cover, j in b().K[k].cover
+                    for i in K(k).cover, j in K(k).cover
                 ) +
                 sum(
-                    b().K[k].fd * R[r][(k,t)].u[i]
-                    for i in b().K[k].cover
+                    K(k).fd * R[r][(k,t)].u[i]
+                    for i in K(k).cover
                 ) +
                 sum(
-                    b().K[k].fp * R[r][(k,t)].z[i]
-                    for i in b().K[k].cover
+                    K(k).fp * R[r][(k,t)].o[i]
+                    for i in K(k).cover
                 )
             )
-            for r in keys(R), k in iter_k, t in b().T
+            for r in keys(R), k in K(), t in T()
         ) + #column costs
         sum(
-            b().V[i].h * I[i,t]
-            for i in iter_i, t in b().T
+            V(i).h * I[i,t]
+            for i in V(), t in T()
         ) + #inventory costs
         sum(
             n.stab.slCoeff * slack[i,t]
-            for i in iter_i, t in b().T
+            for i in V(), t in T()
         ) - #stabilizer
         sum(
             n.stab.suCoeff * surp[i,t]
-            for i in iter_i, t in b().T
+            for i in V(), t in T()
         ) #stabilizer
     )
 
-    passes(i) = [k for k in keys(b().K) if (i in b().K[k].cover)]
-
-    @constraint(mp, λ[i = iter_i, t = b().T],
+    @constraint(mp, λ[i = V(), t = T()],
         I[i,t - 1] +
         sum(R[r][(k,t)].u[i] * θ[r,k,t] for r in keys(R), k in passes(i)) +
         slack[i,t] - surp[i,t] ==
         sum(R[r][(k,t)].v[i] * θ[r,k,t] for r in keys(R), k in passes(i)) +
-        b().d[i,t] + I[i,t]
+        d(i,t) + I[i,t]
     )
 
-    @constraint(mp, δ[k = iter_k, i = b().K[k].cover, t = b().T],
-        sum(R[r][(k,t)].z[i] * θ[r,k,t] for r in keys(R)) <= b().K[k].BP[i]
+    @constraint(mp, δ[k = K(), i = K(k).cover, t = T()],
+        sum(R[r][(k,t)].o[i] * θ[r,k,t] for r in keys(R)) <= K(k).BP[i]
     )
 
-    @constraint(mp, ϵ[k = iter_k, t = b().T],
-        sum(θ[r,k,t] for r in keys(R)) <= sum(b().K[k].BP[i] for i in b().K[k].cover)
+    @constraint(mp, ϵ[k = K(), t = T()],
+        sum(θ[r,k,t] for r in keys(R)) <= sum(K(k).BP[i] for i in K(k).cover)
     )
 
-    @constraint(mp, [i = keys(b().V), t = b().T],
-        b().V[i].MIN <= I[i,t] <= b().V[i].MAX
+    @constraint(mp, [i = V(), t = T()],
+        V(i).MIN <= I[i,t] <= V(i).MAX
     )
 
-    @constraint(mp, [i = keys(b().V)],
-        I[i,first(b().T)-1] == b().V[i].START
+    @constraint(mp, [i = V()],
+        I[i,first(T())-1] == V(i).START
     )
 
     # ================================
     #    BOUND GENERATOR
     # ================================
     F = Dict(1:length(n.bounds) .=> n.bounds)
-    uB = filter(f -> last(f).type == :≲,F)
-    lB = filter(f -> last(f).type == :≳,F)
+    uB = filter(f -> last(f).sense == "<=",F)
+    lB = filter(f -> last(f).sense == ">=",F)
 
-    @constraint(mp, ρ[j = keys(uB)], sum(θ[q.r,q.k,q.t] for q in Q(F[j].B,R)) <= F[j].κ)
-    @constraint(mp, σ[j = keys(lB)], sum(θ[q.r,q.k,q.t] for q in Q(F[j].B,R)) >= F[j].κ)
+    @constraint(mp, ρ[j = keys(uB)], sum(θ[q.r,q.k,q.t] for q in Q(F[j].S,R)) <= F[j].κ)
+    @constraint(mp, σ[j = keys(lB)], sum(θ[q.r,q.k,q.t] for q in Q(F[j].S,R)) >= F[j].κ)
 
     optimize!(mp)
 
     return mp
+end
+
+function sub(n::node,duals::dv)
+    @inbounds for k in K(), t in T()
+        sp = callSub()[(k,t)]
+
+        # ================================
+        #    BOUND IDENTIFICATION
+        # ================================
+        F = Dict(1:length(n.bounds) .=> n.bounds)
+        uB = filter(f -> last(f).sense == "<=" && last(f).S.k == k && last(f).S.t == t,F)
+        lB = filter(f -> last(f).sense == ">=" && last(f).S.k == k && last(f).S.t == t,F)
+
+        #ADD OBJECTIVE
+        @objective(sp, Min,
+            sum(
+                dist(i,j) * (
+                    K(k).vx * sp.obj_dict[:x][i,j] +
+                    K(k).vl * sp.obj_dict[:l][i,j]
+                )
+                for i in K(k).cover, j in K(k).cover
+            ) +
+            sum(K(k).fd * sp.obj_dict[:u][i] for i in K(k).cover) +
+            sum(K(k).fp * sp.obj_dict[:o][i] for i in K(k).cover) -
+            sum(
+                (sp.obj_dict[:u][i] - sp.obj_dict[:v][i]) * duals.λ[i,t]
+                for i in K(k).cover
+            ) -
+            sum(sp.obj_dict[:o][i] * duals.δ[k,i,t] for i in K(k).cover) -
+            duals.ϵ[k,t] -
+            sum(sp.obj_dict[:g][j] * duals.ρ[j] for j in keys(uB)) -
+            sum(sp.obj_dict[:h][j] * duals.σ[j] for j in keys(lB))
+        )
+
+        optimize!(sp)
+        if !silent()
+            println("($k,$t): $(objective_value(sp))")
+        end
+    end
+
+    return callSub()
 end
 
 function getDuals(mp::Model)
@@ -146,214 +279,7 @@ function getDuals(mp::Model)
     ρ = dual.(mp.obj_dict[:ρ])
     σ = dual.(mp.obj_dict[:σ])
 
-    return dval(λ,δ,ϵ,ρ,σ)
-end
-
-const max_component = Ref{Any}(nothing)
-maxq(q::Symbol,i::Int64,j::Int64,k::Int64) = getproperty(max_component[],q)[i,j,k]
-
-function callMx!()
-    max_val = col(
-        JuMP.Containers.DenseAxisArray{Float64}(undef,keys(b().V),keys(b().K)), #u
-        JuMP.Containers.DenseAxisArray{Float64}(undef,keys(b().V),keys(b().K)), #v
-        JuMP.Containers.DenseAxisArray{Float64}(
-            undef,collect(keys(b().V)),collect(keys(b().V)),collect(keys(b().K))
-        ), #l
-        JuMP.Containers.DenseAxisArray{Float64}(undef,keys(b().V),keys(b().K)), #y
-        JuMP.Containers.DenseAxisArray{Float64}(undef,keys(b().V),keys(b().K)), #z
-        JuMP.Containers.DenseAxisArray{Float64}(
-            undef,collect(keys(b().V)),collect(keys(b().V)),collect(keys(b().K))
-        ) #x
-    )
-
-    max_val.y .= 0
-    max_val.z .= 0
-    max_val.x .= 0
-    max_val.u .= 0
-    max_val.v .= 0
-    max_val.l .= 0
-
-    for k in keys(b().K), i in b().K[k].cover
-        max_val.y[i,k] = 1
-        max_val.z[i,k] = 1
-        max_val.u[i,k] = b().K[k].Q
-        max_val.v[i,k] = b().K[k].Q
-        for j in b().K[k].cover
-            max_val.x[i,j,k] = 1
-            max_val.l[i,j,k] = b().K[k].Q
-        end
-    end
-
-    return max_component[] = max_val
-end
-
-const column_structure = Ref{Any}(nothing)
-callSubstruct() = column_structure[] #called everytime a node is processed
-
-function colStructure!(n::node)
-    # ==========================================
-    #    MODEL CONSTRUCTION (BASIC COSNTRAINTS)
-    # ==========================================
-    R = Dict{Tuple,Model}()
-
-    iter_k = Vector{Int64}()
-    iter_k = collect(keys(b().K))
-    iter_i = Vector{Int64}()
-    iter_i = collect(keys(b().V))
-
-    @inbounds for k in iter_k, t in b().T
-        sp = Model(get_optimizer())
-        set_silent(sp)
-        if solver_name(sp) == "Gurobi"
-            set_optimizer_attribute(sp,"Cuts",2)
-            set_optimizer_attribute(sp,"MIPFocus",2)
-            set_optimizer_attribute(sp,"Threads",1)
-            set_optimizer_attribute(sp,"NodefileStart",0.5)
-            set_optimizer_attribute(sp, "NumericFocus",3)
-        end
-
-        @variable(sp, u[b().K[k].cover] >= 0, Int)
-        @variable(sp, v[b().K[k].cover] >= 0, Int)
-        @variable(sp, l[b().K[k].cover, b().K[k].cover] >= 0, Int)
-        @variable(sp, y[b().K[k].cover], Bin)
-        @variable(sp, z[b().K[k].cover], Bin)
-        @variable(sp, x[b().K[k].cover, b().K[k].cover], Bin)
-
-        @constraint(sp,
-            sum(u[i] for i in b().K[k].cover) ==
-            sum(v[i] for i in b().K[k].cover) #all pickup delivered
-        )
-
-        @constraint(sp, α[i = b().K[k].cover],
-            sum(x[j,i] for j in b().K[k].cover) == y[i] + z[i] #traverse in
-        )
-
-        @constraint(sp, β[i = b().K[k].cover],
-            sum(x[i,j] for j in b().K[k].cover) == y[i] + z[i] #traverse out
-        )
-
-        @constraint(sp, [i = b().K[k].cover],
-            sum(l[j,i] for j in b().K[k].cover) -
-            sum(l[i,j] for j in b().K[k].cover) == u[i] - v[i] #load balance
-        )
-
-        @constraint(sp, [i = b().K[k].cover],
-            u[i] <= b().K[k].Q * y[i] #u-y corr
-        )
-
-        @constraint(sp, [i = b().K[k].cover],
-            v[i] <= b().K[k].Q * z[i] #u-y corr
-        )
-
-        @constraint(sp, [i = b().K[k].cover, j = b().K[k].cover],
-            l[i,j] <= b().K[k].Q * x[i,j] #l-x corr
-        )
-
-        @constraint(sp,
-            sum(z[i] for i in b().K[k].cover) <= 1 #only one starting point
-        )
-
-        # ================================
-        #    BOUND IDENTIFICATION
-        # ================================
-        F = Dict(1:length(n.bounds) .=> n.bounds)
-        uB = filter(f -> last(f).type == :≲ && last(f).B[1].k == k && last(f).B[1].t == t,F)
-        lB = filter(f -> last(f).type == :≳ && last(f).B[1].k == k && last(f).B[1].t == t,F)
-
-        @variable(sp, g[keys(uB)], Bin)
-        @variable(sp, h[keys(lB)], Bin)
-
-        q = col(u,v,l,y,z,x)
-
-        for j in keys(uB)
-            η = @variable(sp, [F[j].B], Bin)
-            @constraint(sp, g[j] >= 1 - sum(1 - η[e] for e in F[j].B))
-            @constraint(sp, [e = F[j].B],
-                (maxq(e.q,e.i,e.j,e.k) - e.v + 1) * η[e] >=
-                (getproperty(q,e.q)[e.i,e.j] - e.v + 1)
-            )
-        end
-
-        for j in keys(lB)
-            η = @variable(sp, [F[j].B], Bin)
-            @constraint(sp, [e = F[j].B], h[j] <= η[e])
-            @constraint(sp, [e = F[j].B],
-                e.v * η[e] <=
-                getproperty(q,e.q)[e.i,e.j]
-            )
-        end
-
-        optimize!(sp) #first call biar model kebuild
-
-        R[(k,t)] = sp
-    end
-
-    return column_structure[] = R
-end
-
-function sub(n::node,duals::dval)
-    # ==========================================
-    #    ADD OBJECTIVE AND SOLVE (for each kt)
-    # ==========================================
-    iter_k = Vector{Int64}()
-    iter_k = collect(keys(b().K))
-    iter_i = Vector{Int64}()
-    iter_i = collect(keys(b().V))
-
-    @inbounds for k in iter_k, t in b().T
-        sp = callSubstruct()[(k,t)]
-        set_silent(sp)
-
-        # ================================
-        #    BOUND IDENTIFICATION
-        # ================================
-        F = Dict(1:length(n.bounds) .=> n.bounds)
-        uB = filter(f -> last(f).type == :≲ && last(f).B[1].k == k && last(f).B[1].t == t,F)
-        lB = filter(f -> last(f).type == :≳ && last(f).B[1].k == k && last(f).B[1].t == t,F)
-
-        #ADD OBJECTIVE
-        @objective(sp, Min,
-            sum(
-                b().dist[i,j] * (
-                    b().K[k].vx * sp.obj_dict[:x][i,j] +
-                    b().K[k].vl * sp.obj_dict[:l][i,j]
-                )
-                for i in b().K[k].cover, j in b().K[k].cover
-            ) +
-            sum(
-                b().K[k].fd * sp.obj_dict[:u][i]
-                for i in b().K[k].cover
-            ) +
-            sum(
-                b().K[k].fp * sp.obj_dict[:z][i]
-                for i in b().K[k].cover
-            ) -
-            sum(
-                (sp.obj_dict[:u][i] - sp.obj_dict[:v][i]) * duals.λ[i,t]
-                for i in b().K[k].cover
-            ) -
-            sum(
-                sp.obj_dict[:z][i] * duals.δ[k,i,t]
-                for i in b().K[k].cover
-            ) -
-            duals.ϵ[k,t] -
-            sum(
-                sp.obj_dict[:g][j] * duals.ρ[j]
-                for j in keys(uB)
-            ) -
-            sum(
-                sp.obj_dict[:h][j] * duals.σ[j]
-                for j in keys(lB)
-            )
-        )
-
-        optimize!(sp)
-        if !silent()
-            println("($k,$t): $(objective_value(sp))")
-        end
-    end
-
-    return callSubstruct()
+    return dv(λ,δ,ϵ,ρ,σ)
 end
 
 function getCols(sp)
@@ -361,14 +287,13 @@ function getCols(sp)
         u = value.(sp.obj_dict[:u])
         v = value.(sp.obj_dict[:v])
         l = value.(sp.obj_dict[:l])
-        y = value.(sp.obj_dict[:y])
-        z = value.(sp.obj_dict[:z])
+        o = value.(sp.obj_dict[:o])
         x = value.(sp.obj_dict[:x])
 
-        return col(u,v,l,y,z,x)
+        return col(u,v,l,o,x)
     elseif isa(sp,Dict)
         new = Dict{Tuple,col}()
-        @inbounds for r in keys(sp)
+        for r in keys(sp)
             new[r] = getCols(sp[r])
         end
 
@@ -378,8 +303,8 @@ end
 
 function colvals()
     collection = 0
-    @inbounds for k in keys(b().K), t in b().T
-        collection += objective_value(callSubstruct()[(k,t)])
+    for k in K(), t in T()
+        collection += objective_value(callSub()[(k,t)])
     end
 
     return sum(collection)
@@ -403,16 +328,12 @@ function updateStab!(stab::stabilizer,param::Float64)
     return stab
 end
 
-function checkStab(mp::Model)
-    s = (sum(value.(mp.obj_dict[:slack])) + sum(value.(mp.obj_dict[:surp])))
-
-    return s
-end
+checkStab(mp::Model) = sum(value.(mp.obj_dict[:slack])) + sum(value.(mp.obj_dict[:surp]))
 
 function colGen(n::node;maxCG::Float64,track::Bool)
     terminate = false
     iter = 0
-    colStructure!(n)
+    column!(n)
 
     while !terminate
         if iter < maxCG
@@ -474,7 +395,6 @@ function colGen(n::node;maxCG::Float64,track::Bool)
     else
         if integerCheck(n)
             push!(n.status,"INTEGER")
-            println("NODE $(n.self) INTEGER")
         else
             println("NODE $(n.self) FINISHED.")
         end
@@ -484,19 +404,17 @@ function colGen(n::node;maxCG::Float64,track::Bool)
 end
 
 function origin(n::node)
-    z = JuMP.Containers.DenseAxisArray{Float64}(undef,keys(b().V),keys(b().K),b().T)
-    y = JuMP.Containers.DenseAxisArray{Float64}(undef,keys(b().V),keys(b().K),b().T)
-    u = JuMP.Containers.DenseAxisArray{Float64}(undef,keys(b().V),keys(b().K),b().T)
-    v = JuMP.Containers.DenseAxisArray{Float64}(undef,keys(b().V),keys(b().K),b().T)
+    o = JuMP.Containers.DenseAxisArray{Float64}(undef,V(),K(),T())
+    u = JuMP.Containers.DenseAxisArray{Float64}(undef,V(),K(),T())
+    v = JuMP.Containers.DenseAxisArray{Float64}(undef,V(),K(),T())
     x = JuMP.Containers.DenseAxisArray{Float64}(
-        undef,collect(keys(b().V)),collect(keys(b().V)),collect(keys(b().K)),b().T
+        undef,collect(V()),collect(V()),collect(K()),T()
     )
     l = JuMP.Containers.DenseAxisArray{Float64}(
-        undef,collect(keys(b().V)),collect(keys(b().V)),collect(keys(b().K)),b().T
+        undef,collect(V()),collect(V()),collect(K()),T()
     )
 
-    z .= 0
-    y .= 0
+    o .= 0
     u .= 0
     v .= 0
     l .= 0
@@ -506,20 +424,18 @@ function origin(n::node)
     mp = master(n)
     θ = mp.obj_dict[:θ]
 
-    @inbounds for k in keys(b().K), i in b().K[k].cover,t in b().T
-        z[i,k,t] = value(sum(R[r][(k,t)].z[i] * θ[r,k,t] for r in keys(R)))
-        y[i,k,t] = value(sum(R[r][(k,t)].y[i] * θ[r,k,t] for r in keys(R)))
+    for k in K(), i in K(k).cover,t in T()
+        o[i,k,t] = value(sum(R[r][(k,t)].o[i] * θ[r,k,t] for r in keys(R)))
         u[i,k,t] = value(sum(R[r][(k,t)].u[i] * θ[r,k,t] for r in keys(R)))
         v[i,k,t] = value(sum(R[r][(k,t)].v[i] * θ[r,k,t] for r in keys(R)))
     end
 
-    @inbounds for k in keys(b().K), i in b().K[k].cover,t in b().T, j in b().K[k].cover
+    for k in K(), i in K(k).cover,t in T(), j in K(k).cover
         x[i,j,k,t] = value(sum(R[r][(k,t)].x[i,j] * θ[r,k,t] for r in keys(R)))
         l[i,j,k,t] = value(sum(R[r][(k,t)].l[i,j] * θ[r,k,t] for r in keys(R)))
     end
 
     return col(
-        u,v,l,
-        y,z,x
+        u,v,l,o,x
     )
 end

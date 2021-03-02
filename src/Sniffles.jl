@@ -6,6 +6,7 @@ using DataFrames
 using Distances
 using UUIDs
 using Combinatorics
+using Statistics
 
 include("struct.jl")
 include("settings.jl")
@@ -16,19 +17,25 @@ include("branch.jl")
 #struct.jl
 export vtx
 export veh
-export dt
 export col
-export dval
+export dv
+export S
 export β
 export bound
 export stabilizer
 export node
 
 #base.jl
-export b
+export passes
 export extract!
 export initStab
 export root
+export K
+export V
+export T
+export d
+export dist
+export edges
 
 #settings.jl
 export set_optimizer!
@@ -42,22 +49,19 @@ export silence!
 export silent
 
 #core.jl
-export s
+export callSub
+export Q
+export fract
+export sQ
+export sF
+export column!
 export master
-export getDuals
-export colStructure!
-export callSubstruct
 export sub
+export getDuals
 export getCols
 export colGen
 export origin
 
-#branch.jl
-export separate
-export Btest
 export leaf
-export integerCheck
-export createBranch
-export traverse
 
 end

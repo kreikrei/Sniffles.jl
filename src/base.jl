@@ -2,8 +2,25 @@
 #    BASIC DATA GENERATION
 # =========================================================================
 
-const template_data = Ref{Any}(nothing)
-b() = template_data[] #buat manggil dt default
+const vehicle_data = Ref{Any}(nothing)
+K() = sort!(collect(keys(vehicle_data[])))
+K(k) = vehicle_data[][k]
+
+const vertex_data = Ref{Any}(nothing)
+V() = sort!(collect(keys(vertex_data[])))
+V(i) = vertex_data[][i]
+
+const period_data = Ref{Any}(nothing)
+T() = period_data[]
+T(t) = period_data[][t]
+
+const demand_data = Ref{Any}(nothing)
+d() = demand_data[]
+d(i,t) = demand_data[][i,t]
+
+const distance_data = Ref{Any}(nothing)
+dist() = distance_data[]
+dist(i,j) = distance_data[][i,j]
 
 function extract!(path::String;distformula::String) #extract from excel
     xf = XLSX.readxlsx(path) #READ WORKSHEET
@@ -64,21 +81,25 @@ function extract!(path::String;distformula::String) #extract from excel
         T #dims 2
     )
 
-    res = dt(V,dist,K,T,d) #WRAPPING RESULT TO TYPE dt
+    vehicle_data[] = K
+    vertex_data[] = V
+    period_data[] = T
+    demand_data[] = d
+    distance_data[] = dist
 
-    return template_data[] = res
+    return V,dist,K,T,d
 end
 
-function initStab(res = b())
+function initStab()
     slackCoeff = sl_C()
     surpCoeff = su_C()
-    slackLim = abs.(res.d)
-    surpLim = abs.(res.d)
+    slackLim = abs.(d())
+    surpLim = abs.(d())
 
     return stabilizer(slackCoeff,surpCoeff,slackLim,surpLim)
 end
 
-function root(res = b())
+function root()
     id = uuid1()
     root = node(
         id, id,

@@ -35,14 +35,6 @@ struct veh
     fd::Float64
 end
 
-struct dt
-    V::Dict{Int64,vtx}
-    dist::JuMP.Containers.DenseAxisArray
-    K::Dict{Int64,veh}
-    T::Vector{Int64}
-    d::JuMP.Containers.DenseAxisArray
-end
-
 struct col
     #quantity
     u::JuMP.Containers.DenseAxisArray
@@ -50,12 +42,11 @@ struct col
     l::JuMP.Containers.DenseAxisArray
 
     #decision
-    y::JuMP.Containers.DenseAxisArray
-    z::JuMP.Containers.DenseAxisArray
+    o::JuMP.Containers.DenseAxisArray
     x::JuMP.Containers.DenseAxisArray
 end
 
-struct dval
+struct dv
     #three master constraints
     λ::JuMP.Containers.DenseAxisArray
     δ::JuMP.Containers.SparseAxisArray
@@ -66,18 +57,22 @@ struct dval
     σ::JuMP.Containers.DenseAxisArray
 end
 
-struct β{T<:Any,S<:Any}
-    q::T
-    i::S
-    j::S
-    k::S
-    t::S
-    v::S
+struct β
+    q::Symbol
+    i::Int64
+    sense::Int64
+    v::Int64
+end
+
+struct S
+    k::Int64
+    t::Int64
+    sequence::Vector{β}
 end
 
 struct bound
-    B::Vector{β} #component bound set
-    type::Symbol #≳ or ≲
+    S::S #component bound sequence
+    sense::String #≳ or ≲
     κ::Int64 #value of aggregation
 end
 

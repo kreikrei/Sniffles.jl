@@ -1,64 +1,72 @@
 # =========================================================================
 #    BRANCHING MECHANISMS
 # =========================================================================
+function separate(R,θ,idx,Seq,record)
+    F = fract(Seq,R,θ)
 
-function separate(bounds,R,θ)
-    fract = Vector{NamedTuple}()
-    for r in keys(R), k in keys(b().K), t in b().T
-        if !isinteger(θ[r,k,t])
-            push!(fract,(k=k,t=t))
+    if isempty(F)
+        return record
+    else
+        xagg = Dict()
+        for i in idx
+            xagg[i] = sum(
+                R[f.r][(f.k,f.t)].u[i] * θ[f.r,f.k,f.t] for f in F
+            )
         end
-    end
 
-    #FIND x TO BRANCH
-    for f in fract
-        for i1 in b().K[f.k].cover, j1 in b().K[f.k].cover, v in [0,1] #,i2 in b().K[f.k].cover, j2 in b().K[f.k].cover
-            #if (i1,j1) != (i2,j2)
-            key = β[β(:x,i1,j1,f.k,f.t,v)] #,β(:x,i2,j2,f.k,f.t,1)]
-            val = s(key,R,θ)
-            if !issinteger(val,1e-8)
-                return key
+        found = false
+        for i in idx
+            if abs(xagg[i] - round(xagg[i])) > 1e-8
+                println("$edge : $(xagg[edge])")
+                Seq0 = S(Seq.k,Seq.t,vcat(Seq.sequence,β(:u,i,1,floor(xagg[i]))))
+                push!(record, Seq0)
+                #println(record)
+                found = true
             end
-            #end
-        end
-    end
-
-    for p in bounds
-        for i in b().K[p.B[1].k].cover, j in b().K[p.B[1].k].cover
-            key = vcat(p.B,β(:x,i,j,p.B[1].k,p.B[1].t,1))
-            println(key)
-            val = s(key,R,θ)
-            if !issinteger(val,1e-8)
-                return key
+            if found
+                #println(record)
+                return record
             end
         end
+        #=
+        J = filter(p -> 0 < xagg[p] < sF(Seq,R,θ),idx)
+        if !isempty(J)
+            star = pop!(J)
+
+            #CREATE NEW INPUT
+            Seq1 = S(Seq.k,Seq.t,vcat(Seq.sequence,β(:x,star,1,1)))
+            Seq2 = S(Seq.k,Seq.t,vcat(Seq.sequence,β(:x,star,-1,1)))
+            record = separate(R,θ,J,Seq1,record)
+            record = separate(R,θ,J,Seq2,record)
+        end
+
+        println(record)
+        return record
+        =#
     end
 end
 
-function LV(i::Int64,j::Int64,k::Int64,t::Int64,R,θ)
-    res = Vector{Int64}()
-    for r in keys(R)
-        if !isinteger(θ[r,k,t])
-            push!(res,r)
+function assess(n::node)
+    R = Dict(1:length(n.columns) .=> n.columns)
+    θ = value.(master(n).obj_dict[:θ])
+
+    res = Vector{S}()
+    for k in K(), t in T()
+        Seq = S(k,t,β[])
+        idx = K(k).cover
+        record = Vector{S}()
+
+        final = separate(R,θ,idx,Seq,record)
+        println(final)
+        if !isempty(final)
+            res = final
+            return res
         end
     end
 
-    store = Vector{Int64}() #collect all values contained in rkt
-    for r in res
-        val = getproperty(R[r][(k,t)],:l)[i,j]
-        push!(store,val)
-    end
-
-    unique!(store)
-
-    test = Vector{Int64}() #summarize the values, we average 1-by-1
-    for w in 1:length(store)-1
-        comp = ceil((store[w] + store[w+1]) / 2)
-        push!(test,comp)
-    end
-
-    return test
+    return res
 end
+
 
 issinteger(val,tol) = abs(round(val) - val) < tol
 
@@ -66,29 +74,8 @@ function integerCheck(n::node)
     integer = true
     ori = origin(n)
 
-    for q in [:y,:z], k in keys(b().K), t in b().T, i in b().K[k].cover
-        val = getproperty(ori,q)[i,k,t]
-        if !issinteger(val,1e-8)
-            integer = false
-            break
-        end
-        for j in b().K[k].cover
-            val = ori.x[i,j,k,t]
-            if !issinteger(val,1e-8)
-                integer = false
-                break
-            end
-        end
-    end
-
-    return integer
-end
-
-function integerCheckθ(n::node)
-    integer = true
-    θ = value.(master(n).obj_dict[:θ])
-
-    for val in θ
+    for k in K(), t in T(), i in K(k).cover, j in K(k).cover
+        val = ori.x[i,j,k,t]
         if !issinteger(val,1e-8)
             integer = false
             break
@@ -103,34 +90,37 @@ function createBranch(n::node)
     R = Dict(1:length(n.columns) .=> n.columns)
     θ = value.(master(n).obj_dict[:θ])
 
-    seeds = separate(n.bounds,R,θ)
-    if !isempty(Q(seeds,R))
-        val = s(seeds,R,θ)
-        println("branch on $seeds: $val")
+    candidate = assess(n)
+    seeds = candidate[1]
 
-        for br in [:≲,:≳]
-            push!(branches,
-                node(
-                    n.self, #parent
-                    uuid1(), #self
+    println(seeds)
 
-                    vcat(n.bounds, #bounds
-                        bound(
-                            seeds,br,
-                            if br == :≲
-                                floor(s(seeds,R,θ))
-                            else
-                                ceil(s(seeds,R,θ))
-                            end
-                        )
-                    ),
-                    deepcopy(n.columns), #columns
-                    initStab(), #stabilizer
-                    ["UNVISITED"]
-                )
+    val = sQ(seeds,R,θ)
+    println("branch on $seeds: $val")
+
+    for br in ["<=",">="]
+        push!(branches,
+            node(
+                n.self, #parent
+                uuid1(), #self
+
+                vcat(n.bounds, #bounds
+                    bound(
+                        seeds,br,
+                        if br == "<="
+                            floor(sQ(seeds,R,θ))
+                        else
+                            ceil(sQ(seeds,R,θ))
+                        end
+                    )
+                ),
+                deepcopy(n.columns), #columns
+                initStab(), #stabilizer
+                ["UNVISITED"]
             )
-        end
+        )
     end
+
 
     return branches
 end
