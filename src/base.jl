@@ -3,21 +3,24 @@
 # =========================================================================
 
 const vehicle_data = Ref{Any}(nothing)
-const vertex_data = Ref{Any}(nothing)
-const period_data = Ref{Any}(nothing)
-const demand_data = Ref{Any}(nothing)
-const distance_data = Ref{Any}(nothing)
-
 K() = sort!(collect(keys(vehicle_data[])))
 K(k) = vehicle_data[][k]
+
+const vertex_data = Ref{Any}(nothing)
 V() = sort!(collect(keys(vertex_data[])))
 V(i) = vertex_data[][i]
+
+const period_data = Ref{Any}(nothing)
 T() = period_data[]
+T(t) = period_data[][t]
+
+const demand_data = Ref{Any}(nothing)
 d() = demand_data[]
 d(i,t) = demand_data[][i,t]
+
+const distance_data = Ref{Any}(nothing)
 dist() = distance_data[]
 dist(i,j) = distance_data[][i,j]
-edges(k) = collect(permutations(K(k).cover,2))
 
 function extract!(path::String;distformula::String) #extract from excel
     xf = XLSX.readxlsx(path) #READ WORKSHEET

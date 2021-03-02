@@ -14,13 +14,11 @@ function separate(R,θ,idx,Seq,record)
             )
         end
 
-        println(median(xagg))
-        #=
         found = false
-        for edge in idx
-            if abs(xagg[edge] - round(xagg[edge])) > 1e-8
-                #println("$edge : $(xagg[edge])")
-                Seq0 = S(Seq.k,Seq.t,vcat(Seq.sequence,β(:x,edge,1,1)))
+        for i in idx
+            if abs(xagg[i] - round(xagg[i])) > 1e-8
+                println("$edge : $(xagg[edge])")
+                Seq0 = S(Seq.k,Seq.t,vcat(Seq.sequence,β(:u,i,1,floor(xagg[i]))))
                 push!(record, Seq0)
                 #println(record)
                 found = true
@@ -30,7 +28,7 @@ function separate(R,θ,idx,Seq,record)
                 return record
             end
         end
-
+        #=
         J = filter(p -> 0 < xagg[p] < sF(Seq,R,θ),idx)
         if !isempty(J)
             star = pop!(J)
